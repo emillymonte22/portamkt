@@ -9,30 +9,40 @@
 <body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
 
     <!-- Ecrã de Login -->
-    <div id="login-screen" class="fixed inset-0 bg-slate-900 flex items-center justify-center z-50">
-        <div class="bg-white p-8 rounded-xl shadow-2xl w-96">
-            <h2 class="text-2xl font-bold text-slate-900 mb-6 text-center">Portal Logístico</h2>
+    <div id="login-screen" class="fixed inset-0 bg-sky-600 flex flex-col items-center justify-center z-50 p-4">
+        <div class="mb-8 text-center">
+            <span class="text-4xl md:text-5xl font-extrabold tracking-wider text-white drop-shadow-md">BEMOL</span>
+            <p class="text-sky-100 text-sm mt-1 uppercase tracking-widest font-medium">Marketplace CD — Portal Logístico</p>
+        </div>
+
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md border border-sky-100">
+            <h2 class="text-xl font-bold text-slate-800 mb-1 text-center">Acesso Restrito</h2>
+            <p class="text-xs text-slate-500 mb-6 text-center">Insira as suas credenciais de acesso ao sistema</p>
+            
             <form id="login-form" onsubmit="fazerLogin(event)" class="space-y-4">
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Utilizador</label>
-                    <input type="text" id="username" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Utilizador</label>
+                    <input type="text" id="username" required placeholder="Digite o seu utilizador" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-slate-700 mb-1">Senha</label>
-                    <input type="password" id="senha" required class="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Senha</label>
+                    <input type="password" id="senha" required placeholder="••••••••" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-500">
                 </div>
-                <button type="submit" class="w-full bg-blue-600 text-white py-2 rounded-lg font-semibold hover:bg-blue-700 transition">Entrar</button>
-                <p id="login-error" class="text-red-500 text-sm text-center hidden mt-2">Utilizador ou senha incorretos</p>
+                <button type="submit" class="w-full bg-sky-600 hover:bg-sky-700 text-white py-3 rounded-lg font-semibold shadow-md transition duration-200">Entrar no Portal</button>
+                <p id="login-error" class="text-red-500 text-xs text-center hidden mt-2">Utilizador ou senha incorretos</p>
             </form>
         </div>
+        <footer class="mt-8 text-sky-100 text-xs">
+            &copy; 2026 Bemol — Gestão de Operações de Alto Valor e Marketplace
+        </footer>
     </div>
 
     <!-- Painel Principal -->
     <div id="app-screen" class="hidden flex-1 flex flex-col">
         <header class="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm">
             <div>
-                <h1 class="text-xl font-bold text-slate-900">Gestão de Operações e Agendamentos</h1>
-                <p class="text-xs text-slate-500">Perfil ativo: <span id="user-profile-badge" class="font-semibold uppercase text-blue-600"></span></p>
+                <h1 class="text-xl font-bold text-slate-900">Gestão de Operações e Pedidos</h1>
+                <p class="text-xs text-slate-500">Perfil ativo: <span id="user-profile-badge" class="font-semibold uppercase text-sky-600"></span></p>
             </div>
             <button onclick="terminarSessao()" class="text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition">Sair</button>
         </header>
@@ -40,47 +50,47 @@
         <main class="max-w-7xl w-full mx-auto p-6 flex-1 space-y-6">
             <!-- Formulário de Nova Operação -->
             <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h2 class="text-lg font-semibold text-slate-800 mb-4">Registar Nova Operação / Agendamento</h2>
+                <h2 class="text-lg font-semibold text-slate-800 mb-4">Registar Nova Operação</h2>
                 <form id="operacao-form" onsubmit="guardarOperacao(event)" class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label class="block text-xs font-medium text-slate-600 mb-1">Seller / Lojista</label>
-                        <input type="text" id="seller" required placeholder="Nome do Seller" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                        <input type="text" id="seller" required placeholder="Nome do Seller" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-slate-600 mb-1">Transportadora</label>
-                        <input type="text" id="transportadora" required placeholder="Ex: LATAM / KM Cargo" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                        <input type="text" id="transportadora" required placeholder="Ex: LATAM / KM Cargo" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
                     </div>
                     <!-- Campo Motorista (Ocultado se perfil for CD) -->
-                    <div id="campo-motorista" class="hidden-field">
+                    <div id="campo-motorista">
                         <label class="block text-xs font-medium text-slate-600 mb-1">Motorista</label>
-                        <input type="text" id="motorista" placeholder="Nome do motorista" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                        <input type="text" id="motorista" placeholder="Nome do motorista" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
                     </div>
                     <!-- Campo Placa (Ocultado se perfil for CD) -->
-                    <div id="campo-placa" class="hidden-field">
+                    <div id="campo-placa">
                         <label class="block text-xs font-medium text-slate-600 mb-1">Placa do Veículo</label>
-                        <input type="text" id="veiculo_placa" placeholder="Ex: PHX-8A32" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                        <input type="text" id="veiculo_placa" placeholder="Ex: PHX-8A32" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-slate-600 mb-1">Nota Fiscal (NF)</label>
-                        <input type="text" id="nota_fiscal" required placeholder="Número da NF" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                        <input type="text" id="nota_fiscal" required placeholder="Número da NF" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-slate-600 mb-1">Tipo de Carga</label>
-                        <select id="tipo_carga" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                        <select id="tipo_carga" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
                             <option value="Alto Valor">Alto Valor</option>
                             <option value="Marketplace">Marketplace</option>
                             <option value="Geral">Geral</option>
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Data Prevista</label>
-                        <input type="datetime-local" id="data_agendamento" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Data da Operação</label>
+                        <input type="datetime-local" id="data_agendamento" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-slate-600 mb-1">Etapa Atual da Operação</label>
-                        <select id="status_etapa" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500">
+                        <select id="status_etapa" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
                             <option value="Emissão do Pedido">1. Emissão do Pedido</option>
-                            <option value="Coleta Agendada">2. Coleta Agendada</option>
+                            <option value="Coleta Registada">2. Coleta Registada</option>
                             <option value="Coleta Realizada">3. Coleta Realizada</option>
                             <option value="Em Trânsito SP-MAO">4. Em Trânsito SP-MAO</option>
                             <option value="Recebido no CD">5. Recebido no CD</option>
@@ -94,7 +104,7 @@
 
             <!-- Listagem -->
             <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h2 class="text-lg font-semibold text-slate-800 mb-4">Acompanhamento de Pedidos e Coletas por Seller</h2>
+                <h2 class="text-lg font-semibold text-slate-800 mb-4">Acompanhamento de Pedidos e Operações por Seller</h2>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-sm text-slate-600">
                         <thead class="bg-slate-100 text-slate-700 uppercase text-xs">
@@ -152,7 +162,6 @@
         function aplicarPermissoesPerfil() {
             document.getElementById('user-profile-badge').innerText = `${currentUser.username} (${currentUser.perfil})`;
             
-            // Se for o perfil 'cd', ocultar os campos de Motorista e Placa do Veículo
             const campoMotorista = document.getElementById('campo-motorista');
             const campoPlaca = document.getElementById('campo-placa');
             const inputMotorista = document.getElementById('motorista');
@@ -199,7 +208,7 @@
 
             if (res.ok) {
                 document.getElementById('operacao-form').reset();
-                aplicarPermissoesPerfil(); // Reaplicar defaults se CD
+                aplicarPermissoesPerfil();
                 carregarAgendamentos();
             } else {
                 alert('Erro ao guardar operação');
@@ -222,7 +231,7 @@
                     <td class="p-3">${item.seller}</td>
                     <td class="p-3">${item.transportadora}</td>
                     <td class="p-3">${item.motorista} / ${item.veiculo_placa}</td>
-                    <td class="p-3 font-semibold text-blue-600">${item.nota_fiscal}</td>
+                    <td class="p-3 font-semibold text-sky-600">${item.nota_fiscal}</td>
                     <td class="p-3"><span class="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded font-medium">${item.tipo_carga}</span></td>
                     <td class="p-3">${new Date(item.data_agendamento).toLocaleString('pt-BR')}</td>
                     <td class="p-3"><span class="bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded font-medium">${item.status_etapa}</span></td>
@@ -230,7 +239,6 @@
             `).join('');
         }
 
-        // Verificar sessão guardada
         window.onload = () => {
             const savedUser = localStorage.getItem('user');
             if (savedUser) {
