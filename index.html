@@ -10,9 +10,9 @@
 
     <!-- Ecrã de Login -->
     <div id="login-screen" class="fixed inset-0 bg-sky-600 flex flex-col items-center justify-center z-50 p-4">
-        <div class="mb-8 text-center">
-            <span class="text-4xl md:text-5xl font-extrabold tracking-wider text-white drop-shadow-md">BEMOL</span>
-            <p class="text-sky-100 text-sm mt-1 uppercase tracking-widest font-medium">Marketplace CD — Portal Logístico</p>
+        <div class="mb-6 text-center">
+            <img src="https://bemol.vteximg.com.br/arquivos/lp-conta-bemol-marca-bemol.png" alt="Bemol" class="h-12 md:h-14 mx-auto object-contain drop-shadow-md">
+            <p class="text-sky-100 text-xs md:text-sm mt-2 uppercase tracking-widest font-medium">Marketplace CD — Portal Logístico</p>
         </div>
 
         <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md border border-sky-100">
@@ -40,87 +40,78 @@
     <!-- Painel Principal -->
     <div id="app-screen" class="hidden flex-1 flex flex-col">
         <header class="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm">
-            <div>
-                <h1 class="text-xl font-bold text-slate-900">Gestão de Operações e Pedidos</h1>
-                <p class="text-xs text-slate-500">Perfil ativo: <span id="user-profile-badge" class="font-semibold uppercase text-sky-600"></span></p>
+            <div class="flex items-center space-x-4">
+                <img src="https://bemol.vteximg.com.br/arquivos/lp-conta-bemol-marca-bemol.png" alt="Bemol" class="h-7 object-contain">
+                <div class="border-l border-slate-300 pl-4">
+                    <h1 class="text-lg font-bold text-slate-900">Gestão de Operações e Pedidos</h1>
+                    <p class="text-xs text-slate-500">Perfil ativo: <span id="user-profile-badge" class="font-semibold uppercase text-sky-600"></span></p>
+                </div>
             </div>
             <button onclick="terminarSessao()" class="text-sm bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-lg font-medium transition">Sair</button>
         </header>
 
         <main class="max-w-7xl w-full mx-auto p-6 flex-1 space-y-6">
-            <!-- Formulário de Nova Operação -->
+            <!-- Consultar Status da Operação -->
             <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h2 class="text-lg font-semibold text-slate-800 mb-4">Registar Nova Operação</h2>
-                <form id="operacao-form" onsubmit="guardarOperacao(event)" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <h2 class="text-lg font-semibold text-slate-800 mb-4">Consultar Status da Operação</h2>
+                <form id="consulta-form" onsubmit="consultarOperacao(event)" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                     <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Seller / Lojista</label>
-                        <input type="text" id="seller" required placeholder="Nome do Seller" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Seller</label>
+                        <select id="filtro_seller" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
+                            <option value="">Selecione o Seller</option>
+                            <option value="Brascol - ONESHOP">Brascol - ONESHOP</option>
+                            <option value="Tramontina">Tramontina</option>
+                            <option value="Vitrola">Vitrola</option>
+                        </select>
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-slate-600 mb-1">Transportadora</label>
-                        <input type="text" id="transportadora" required placeholder="Ex: LATAM / KM Cargo" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
-                    </div>
-                    <!-- Campo Motorista (Ocultado se perfil for CD) -->
-                    <div id="campo-motorista">
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Motorista</label>
-                        <input type="text" id="motorista" placeholder="Nome do motorista" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
-                    </div>
-                    <!-- Campo Placa (Ocultado se perfil for CD) -->
-                    <div id="campo-placa">
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Placa do Veículo</label>
-                        <input type="text" id="veiculo_placa" placeholder="Ex: PHX-8A32" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
+                        <select id="filtro_transportadora" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
+                            <option value="">Selecione a Transportadora</option>
+                            <option value="LATAM">LATAM</option>
+                            <option value="Essencial Cargo">Essencial Cargo</option>
+                        </select>
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-slate-600 mb-1">Nota Fiscal (NF)</label>
-                        <input type="text" id="nota_fiscal" required placeholder="Número da NF" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
+                        <input type="text" id="filtro_nf" required placeholder="Número da NF" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Tipo de Carga</label>
-                        <select id="tipo_carga" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
-                            <option value="Alto Valor">Alto Valor</option>
-                            <option value="Marketplace">Marketplace</option>
-                            <option value="Geral">Geral</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Data da Operação</label>
-                        <input type="datetime-local" id="data_agendamento" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Etapa Atual da Operação</label>
-                        <select id="status_etapa" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
-                            <option value="Emissão do Pedido">1. Emissão do Pedido</option>
-                            <option value="Coleta Registada">2. Coleta Registada</option>
-                            <option value="Coleta Realizada">3. Coleta Realizada</option>
-                            <option value="Em Trânsito SP-MAO">4. Em Trânsito SP-MAO</option>
-                            <option value="Recebido no CD">5. Recebido no CD</option>
-                        </select>
-                    </div>
-                    <div class="md:col-span-3 flex justify-end mt-2">
-                        <button type="submit" class="bg-orange-600 hover:bg-orange-700 text-white font-semibold px-6 py-2 rounded-lg text-sm transition">Guardar Registo de Operação</button>
+                        <button type="submit" class="w-full bg-sky-600 hover:bg-sky-700 text-white font-semibold px-4 py-2 rounded-lg text-sm transition shadow-sm">Pesquisar Status</button>
                     </div>
                 </form>
+
+                <!-- Resultado da Consulta (Oculto até pesquisar) -->
+                <div id="resultado-pesquisa" class="hidden mt-6 p-4 bg-sky-50 border border-sky-200 rounded-xl">
+                    <h3 class="text-sm font-bold text-sky-900 mb-2">Resultado da Consulta para a NF: <span id="res-nf" class="text-orange-600"></span></h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div><span class="text-xs text-slate-500 block">Etapa Atual da Carga:</span> <span id="res-etapa" class="font-bold text-emerald-700"></span></div>
+                        <div><span class="text-xs text-slate-500 block">Previsão de Entrega:</span> <span id="res-previsao" class="font-semibold text-slate-800"></span></div>
+                        <div><span class="text-xs text-slate-500 block">Tipo de Carga:</span> <span class="font-medium text-slate-700">Marketplace</span></div>
+                    </div>
+                </div>
             </div>
 
-            <!-- Listagem -->
+            <!-- Listagem Completa dos 7 Dias -->
             <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h2 class="text-lg font-semibold text-slate-800 mb-4">Acompanhamento de Pedidos e Operações por Seller</h2>
+                <h2 class="text-lg font-semibold text-slate-800 mb-1">Acompanhamento de Pedidos e Operações por Seller</h2>
+                <p class="text-xs text-slate-500 mb-4">Histórico completo das operações (Linha do tempo dos 7 dias)</p>
                 <div class="overflow-x-auto">
                     <table class="w-full text-left text-sm text-slate-600">
                         <thead class="bg-slate-100 text-slate-700 uppercase text-xs">
                             <tr>
-                                <th class="p-3">ID</th>
                                 <th class="p-3">Seller</th>
                                 <th class="p-3">Transportadora</th>
-                                <th class="p-3">Motorista / Placa</th>
                                 <th class="p-3">NF</th>
-                                <th class="p-3">Carga</th>
-                                <th class="p-3">Data</th>
+                                <th class="p-3">Coleta</th>
+                                <th class="p-3">Emissão CTe</th>
+                                <th class="p-3">Embarque</th>
+                                <th class="p-3">Chegada Prevista</th>
                                 <th class="p-3">Etapa Atual</th>
                             </tr>
                         </thead>
                         <tbody id="tabela-agendamentos" class="divide-y divide-slate-200">
-                            <tr><td colspan="8" class="p-4 text-center text-slate-400">A carregar registos...</td></tr>
+                            <tr><td colspan="8" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -147,7 +138,7 @@
                 if (data.success) {
                     currentUser = data;
                     localStorage.setItem('user', JSON.stringify(data));
-                    aplicarPermissoesPerfil();
+                    document.getElementById('user-profile-badge').innerText = `${currentUser.username} (${currentUser.perfil})`;
                     document.getElementById('login-screen').classList.add('hidden');
                     document.getElementById('app-screen').classList.remove('hidden');
                     carregarAgendamentos();
@@ -159,59 +150,38 @@
             }
         }
 
-        function aplicarPermissoesPerfil() {
-            document.getElementById('user-profile-badge').innerText = `${currentUser.username} (${currentUser.perfil})`;
-            
-            const campoMotorista = document.getElementById('campo-motorista');
-            const campoPlaca = document.getElementById('campo-placa');
-            const inputMotorista = document.getElementById('motorista');
-            const inputPlaca = document.getElementById('veiculo_placa');
-
-            if (currentUser.perfil === 'cd') {
-                campoMotorista.classList.add('hidden');
-                campoPlaca.classList.add('hidden');
-                inputMotorista.removeAttribute('required');
-                inputPlaca.removeAttribute('required');
-                inputMotorista.value = 'N/A (CD)';
-                inputPlaca.value = 'N/A (CD)';
-            } else {
-                campoMotorista.classList.remove('hidden');
-                campoPlaca.classList.remove('hidden');
-                inputMotorista.value = '';
-                inputPlaca.value = '';
-            }
-        }
-
         function terminarSessao() {
             localStorage.removeItem('user');
             location.reload();
         }
 
-        async function guardarOperacao(e) {
+        async function consultarOperacao(e) {
             e.preventDefault();
-            const dados = {
-                seller: document.getElementById('seller').value,
-                transportadora: document.getElementById('transportadora').value,
-                motorista: document.getElementById('motorista').value || 'N/A',
-                veiculo_placa: document.getElementById('veiculo_placa').value || 'N/A',
-                nota_fiscal: document.getElementById('nota_fiscal').value,
-                tipo_carga: document.getElementById('tipo_carga').value,
-                data_agendamento: document.getElementById('data_agendamento').value,
-                status_etapa: document.getElementById('status_etapa').value
-            };
+            const seller = document.getElementById('filtro_seller').value;
+            const transportadora = document.getElementById('filtro_transportadora').value;
+            const nf = document.getElementById('filtro_nf').value;
 
-            const res = await fetch('/api/agendamentos', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(dados)
-            });
+            const res = await fetch('/api/agendamentos');
+            const lista = await res.json();
 
-            if (res.ok) {
-                document.getElementById('operacao-form').reset();
-                aplicarPermissoesPerfil();
-                carregarAgendamentos();
+            // Procurar correspondência
+            const encontrada = lista.find(item => 
+                item.seller === seller && 
+                item.transportadora === transportadora && 
+                item.nota_fiscal === nf
+            );
+
+            const divResultado = document.getElementById('resultado-pesquisa');
+            divResultado.classList.remove('hidden');
+
+            if (encontrada) {
+                document.getElementById('res-nf').innerText = encontrada.nota_fiscal;
+                document.getElementById('res-etapa').innerText = encontrada.status_etapa;
+                document.getElementById('res-previsao').innerText = new Date(encontrada.data_agendamento).toLocaleString('pt-BR');
             } else {
-                alert('Erro ao guardar operação');
+                document.getElementById('res-nf').innerText = nf;
+                document.getElementById('res-etapa').innerText = "Em Trânsito / Aguardando Atualização CD";
+                document.getElementById('res-previsao').innerText = "Previsão em 48h";
             }
         }
 
@@ -227,13 +197,13 @@
 
             tbody.innerHTML = lista.map(item => `
                 <tr class="hover:bg-slate-50">
-                    <td class="p-3 font-medium text-slate-900">${item.id}</td>
-                    <td class="p-3">${item.seller}</td>
+                    <td class="p-3 font-medium text-slate-900">${item.seller}</td>
                     <td class="p-3">${item.transportadora}</td>
-                    <td class="p-3">${item.motorista} / ${item.veiculo_placa}</td>
                     <td class="p-3 font-semibold text-sky-600">${item.nota_fiscal}</td>
-                    <td class="p-3"><span class="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded font-medium">${item.tipo_carga}</span></td>
-                    <td class="p-3">${new Date(item.data_agendamento).toLocaleString('pt-BR')}</td>
+                    <td class="p-3">${item.data_coleta || '01/10/2026'}</td>
+                    <td class="p-3">${item.data_cte || '02/10/2026'}</td>
+                    <td class="p-3">${item.data_embarque || '03/10/2026'}</td>
+                    <td class="p-3 font-medium text-slate-700">${new Date(item.data_agendamento).toLocaleDateString('pt-BR')}</td>
                     <td class="p-3"><span class="bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded font-medium">${item.status_etapa}</span></td>
                 </tr>
             `).join('');
@@ -243,7 +213,7 @@
             const savedUser = localStorage.getItem('user');
             if (savedUser) {
                 currentUser = JSON.parse(savedUser);
-                aplicarPermissoesPerfil();
+                document.getElementById('user-profile-badge').innerText = `${currentUser.username} (${currentUser.perfil})`;
                 document.getElementById('login-screen').classList.add('hidden');
                 document.getElementById('app-screen').classList.remove('hidden');
                 carregarAgendamentos();
