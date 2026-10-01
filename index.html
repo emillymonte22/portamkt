@@ -40,7 +40,7 @@
     <!-- Painel Principal com Menu Lateral -->
     <div id="app-screen" class="hidden flex-1 flex flex-row min-h-screen">
         
-        <!-- Sidebar Esquerda (Estilo Milk Run) -->
+        <!-- Sidebar Esquerda (Layout 3 - Foco em Consultas, Indicadores e Relatórios) -->
         <aside class="w-72 bg-[#002B49] text-white flex flex-col shadow-xl">
             <!-- Cabeçalho da Sidebar -->
             <div class="p-6 border-b border-sky-900/50">
@@ -52,45 +52,25 @@
             </div>
 
             <!-- Navegação de Menus -->
-            <div class="px-4 py-6 flex-1 space-y-1">
+            <div class="px-4 py-6 flex-1 space-y-2">
                 <p class="px-3 text-[10px] font-bold text-sky-400 uppercase tracking-wider mb-2">Portal Milk Run</p>
                 
-                <button onclick="mudarAba('geral')" id="menu-geral" class="w-full flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition bg-sky-600 text-white shadow-md">
-                    <span>🏠</span>
-                    <span>Dashboard / Consulta</span>
+                <!-- Consultas -->
+                <button onclick="mudarAba('consultas')" id="menu-consultas" class="w-full flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition bg-sky-600 text-white shadow-md">
+                    <span>🔍</span>
+                    <span>Consultas</span>
                 </button>
 
-                <button onclick="mudarAba('programacao')" id="menu-programacao" class="w-full flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition text-sky-200 hover:bg-sky-900/40">
-                    <span>📅</span>
-                    <span>Programação diária</span>
-                </button>
-
-                <button onclick="mudarAba('solicitacoes')" id="menu-solicitacoes" class="w-full flex items-center justify-between px-3 py-3 rounded-xl text-sm font-medium transition text-sky-200 hover:bg-sky-900/40">
-                    <div class="flex items-center space-x-3">
-                        <span>✨</span>
-                        <span>Solicitações</span>
-                    </div>
-                    <span class="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">0</span>
-                </button>
-
-                <button onclick="mudarAba('cadastros')" id="menu-cadastros" class="w-full flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition text-sky-200 hover:bg-sky-900/40">
-                    <span>📊</span>
-                    <span>Cadastros</span>
-                </button>
-
-                <button onclick="mudarAba('cronograma')" id="menu-cronograma" class="w-full flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition text-sky-200 hover:bg-sky-900/40">
-                    <span>📆</span>
-                    <span>Cronograma</span>
-                </button>
-
+                <!-- Indicadores -->
                 <button onclick="mudarAba('indicadores')" id="menu-indicadores" class="w-full flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition text-sky-200 hover:bg-sky-900/40">
                     <span>📈</span>
                     <span>Indicadores</span>
                 </button>
 
+                <!-- Extrair Relatório -->
                 <button onclick="mudarAba('relatorios')" id="menu-relatorios" class="w-full flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition text-sky-200 hover:bg-sky-900/40">
-                    <span>📉</span>
-                    <span>Relatórios</span>
+                    <span>📄</span>
+                    <span>Extrair Relatório</span>
                 </button>
 
                 <!-- Menu Exclusivo CD: Disponível para Coleta LATAM -->
@@ -119,7 +99,7 @@
             <!-- Header Superior -->
             <header class="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center shadow-sm">
                 <div>
-                    <h2 class="text-xl font-bold text-slate-800" id="titulo-pagina">Dashboard / Consulta</h2>
+                    <h2 class="text-xl font-bold text-slate-800" id="titulo-pagina">Consultas</h2>
                     <p class="text-xs text-slate-500">Gestão operacional de cargas e entregas</p>
                 </div>
                 <div class="flex items-center space-x-4">
@@ -130,8 +110,8 @@
 
             <main class="p-8 flex-1 space-y-6 overflow-y-auto">
                 
-                <!-- CONTEÚDO: GERAL / DASHBOARD -->
-                <div id="conteudo-geral" class="space-y-6">
+                <!-- CONTEÚDO: CONSULTAS -->
+                <div id="conteudo-consultas" class="space-y-6">
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <h3 class="text-base font-bold text-slate-800 mb-4">Consultar Status da Operação</h3>
                         <form id="consulta-form" onsubmit="consultarOperacao(event)" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
@@ -252,7 +232,7 @@
                     </div>
                 </div>
 
-                <!-- CONTEÚDO GENÉRICO PARA OUTRAS ABAS DO MENU -->
+                <!-- CONTEÚDO GENÉRICO PARA INDICADORES, RELATÓRIOS E VALORES -->
                 <div id="conteudo-generico" class="space-y-6 hidden">
                     <div class="bg-white p-12 rounded-2xl shadow-sm border border-slate-200 text-center">
                         <h3 class="text-lg font-bold text-slate-700 mb-2" id="titulo-generico">Módulo em Funcionamento</h3>
@@ -301,7 +281,6 @@
             const menuCd = document.getElementById('menu-cd-coleta');
             const menuAdmin = document.getElementById('menu-admin');
 
-            // Apenas CD e Admin veem a opção de Coleta LATAM
             if (currentUser.perfil === 'cd' || currentUser.perfil === 'admin') {
                 menuCd.classList.remove('hidden');
                 menuCd.classList.add('flex');
@@ -310,7 +289,6 @@
                 menuCd.classList.remove('flex');
             }
 
-            // Exclusivo Admin: Painel de Sinalização
             if (currentUser.perfil === 'admin') {
                 menuAdmin.classList.remove('hidden');
                 menuAdmin.classList.add('flex');
@@ -326,14 +304,12 @@
         }
 
         function mudarAba(aba) {
-            // Ocultar todos os conteúdos
-            document.getElementById('conteudo-geral').classList.add('hidden');
+            document.getElementById('conteudo-consultas').classList.add('hidden');
             document.getElementById('conteudo-cd-coleta').classList.add('hidden');
             document.getElementById('conteudo-admin').classList.add('hidden');
             document.getElementById('conteudo-generico').classList.add('hidden');
 
-            // Resetar estilos de todos os botões do menu
-            const menus = ['menu-geral', 'menu-programacao', 'menu-solicitacoes', 'menu-cadastros', 'menu-cronograma', 'menu-indicadores', 'menu-relatorios', 'menu-cd-coleta', 'menu-admin', 'menu-valores'];
+            const menus = ['menu-consultas', 'menu-indicadores', 'menu-relatorios', 'menu-cd-coleta', 'menu-admin', 'menu-valores'];
             menus.forEach(id => {
                 const el = document.getElementById(id);
                 if(el) {
@@ -341,11 +317,10 @@
                 }
             });
 
-            // Ativar a aba correspondente
-            if (aba === 'geral') {
-                document.getElementById('conteudo-geral').classList.remove('hidden');
-                document.getElementById('titulo-pagina').innerText = "Dashboard / Consulta";
-                document.getElementById('menu-geral').className += " bg-sky-600 text-white shadow-md";
+            if (aba === 'consultas') {
+                document.getElementById('conteudo-consultas').classList.remove('hidden');
+                document.getElementById('titulo-pagina').innerText = "Consultas";
+                document.getElementById('menu-consultas').className += " bg-sky-600 text-white shadow-md";
             } else if (aba === 'cd-coleta') {
                 document.getElementById('conteudo-cd-coleta').classList.remove('hidden');
                 document.getElementById('titulo-pagina').innerText = "Disponível para Coleta — LATAM";
@@ -357,12 +332,8 @@
             } else {
                 document.getElementById('conteudo-generico').classList.remove('hidden');
                 const nomes = {
-                    'programacao': 'Programação Diária',
-                    'solicitacoes': 'Solicitações de Coleta',
-                    'cadastros': 'Cadastros de Operação',
-                    'cronograma': 'Cronograma de Entregas',
-                    'indicadores': 'Indicadores de Desempenho',
-                    'relatorios': 'Relatórios Gerenciais',
+                    'indicadores': 'Indicadores',
+                    'relatorios': 'Extrair Relatório',
                     'valores': 'Valores das Notas Fiscais'
                 };
                 document.getElementById('titulo-generico').innerText = nomes[aba] || 'Módulo do Sistema';
@@ -407,7 +378,6 @@
             const res = await fetch('/api/agendamentos');
             const lista = await res.json();
             
-            // 1. Tabela Geral
             const tbodyGeral = document.getElementById('tabela-agendamentos');
             if (lista.length === 0) {
                 tbodyGeral.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-slate-400">Nenhum registo encontrado.</td></tr>`;
@@ -426,7 +396,6 @@
                 `).join('');
             }
 
-            // 2. Tabela CD (Apenas LATAM liberada)
             const latamDisponiveis = lista.filter(item => item.transportadora === 'LATAM' && item.liberado_latam);
             const tbodyCd = document.getElementById('tabela-cd-latam');
             if (latamDisponiveis.length === 0) {
@@ -444,7 +413,6 @@
                 `).join('');
             }
 
-            // 3. Tabela Admin (Se for perfil admin)
             if (currentUser && currentUser.perfil === 'admin') {
                 const tbodyAdmin = document.getElementById('tabela-admin-sinalizacao');
                 const latamAdmin = lista.filter(item => item.transportadora === 'LATAM');
