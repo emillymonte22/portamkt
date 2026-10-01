@@ -2,10 +2,14 @@ export async function onRequest(context) {
   const { request, env } = context;
   const url = new URL(request.url);
 
+  // Normalizar o caminho para aceitar com ou sem / inicial
+  const path = url.pathname.toLowerCase();
+
   // Endpoint de Login
-  if (url.pathname === '/api/login' && request.method === 'POST') {
+  if ((path.endsWith('/api/login') || path === '/api/login' || path === 'api/login') && request.method === 'POST') {
     try {
       const { username, senha } = await request.json();
+      
       const user = await env.DB.prepare(
         "SELECT * FROM usuarios WHERE username = ? AND senha = ?"
       ).bind(username, senha).first();
@@ -21,7 +25,7 @@ export async function onRequest(context) {
   }
 
   // Endpoint de Gestão de Operações e Agendamentos
-  if (url.pathname === '/api/agendamentos') {
+  if (path.endsWith('/api/agendamentos') || path === '/api/agendamentos' || path === 'api/agendamentos') {
     if (request.method === 'GET') {
       try {
         const { results } = await env.DB.prepare(
@@ -50,5 +54,5 @@ export async function onRequest(context) {
     }
   }
 
-  return new Response("Not Found", { status: 404 });
+  return new Response(`Not Found: ${url.pathname}`, { status: 404 });
 }
