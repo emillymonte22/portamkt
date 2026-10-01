@@ -1,12 +1,10 @@
 export async function onRequest(context) {
-  const { request, env } = context;
+  const { request, env, next } = context;
   const url = new URL(request.url);
-
-  // Normalizar o caminho para aceitar com ou sem / inicial
   const path = url.pathname.toLowerCase();
 
   // Endpoint de Login
-  if ((path.endsWith('/api/login') || path === '/api/login' || path === 'api/login') && request.method === 'POST') {
+  if (path.includes('/api/login') && request.method === 'POST') {
     try {
       const { username, senha } = await request.json();
       
@@ -25,7 +23,7 @@ export async function onRequest(context) {
   }
 
   // Endpoint de Gestão de Operações e Agendamentos
-  if (path.endsWith('/api/agendamentos') || path === '/api/agendamentos' || path === 'api/agendamentos') {
+  if (path.includes('/api/agendamentos')) {
     if (request.method === 'GET') {
       try {
         const { results } = await env.DB.prepare(
@@ -54,5 +52,6 @@ export async function onRequest(context) {
     }
   }
 
-  return new Response(`Not Found: ${url.pathname}`, { status: 404 });
+  // Para qualquer outra página ou ficheiro estático (como index.html), deixa passar normalmente
+  return next();
 }
