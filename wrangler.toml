@@ -1,8 +1,8 @@
-name = "norte-log-agenda-portal"
-main = "worker.js"
-compatibility_date = "2026-01-01"
+name = "seu-portal-worker"
+main = "src/index.js"
+compatibility_date = "2026-03-25"
 
 [[d1_databases]]
-binding = "DB"
+binding = "DB" 
 database_name = "portamkt-db"
 database_id = "46af9aee-add1-421f-90c6-a87f847fca86"
