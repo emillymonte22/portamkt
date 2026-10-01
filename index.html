@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portal de Agendamento | CD Marketplace - Bemol</title>
+    <title>Portal Logístico & CD Marketplace - Bemol</title>
     <style>
         :root {
             --bemol-blue: #0056b3;
@@ -18,184 +18,214 @@
             background-color: var(--bg-color);
             color: var(--text-color);
             margin: 0;
-            padding: 20px;
+            padding: 0;
         }
+        .login-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background: linear-gradient(135deg, var(--bemol-dark), var(--bemol-blue));
+        }
+        .login-card {
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        .login-card h2 { margin-top: 0; color: var(--bemol-dark); }
         .container {
-            max-width: 1000px;
+            max-width: 1200px;
             margin: 0 auto;
+            padding: 20px;
         }
         header {
             background: linear-gradient(135deg, var(--bemol-dark), var(--bemol-blue));
             color: white;
-            padding: 25px;
+            padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            margin-bottom: 25px;
-            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
         }
-        h1 {
-            margin: 0;
-            font-size: 26px;
-        }
-        header p {
-            margin: 8px 0 0 0;
-            font-size: 14px;
-            opacity: 0.9;
-        }
+        header h1 { margin: 0; font-size: 22px; }
+        .user-info { font-size: 14px; text-align: right; }
+        .user-info button { background: var(--bemol-orange); border: none; color: white; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-top: 5px; }
         .card {
             background-color: var(--card-bg);
-            padding: 25px;
+            padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            margin-bottom: 25px;
+            margin-bottom: 20px;
         }
-        h2 {
-            font-size: 18px;
-            margin-top: 0;
-            border-bottom: 2px solid #eaeaea;
-            padding-bottom: 12px;
-            color: var(--bemol-dark);
-        }
+        h2 { font-size: 18px; margin-top: 0; border-bottom: 2px solid #eaeaea; padding-bottom: 10px; color: var(--bemol-dark); }
         .form-grid {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
         }
-        .form-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            margin-bottom: 6px;
-            font-weight: 600;
-            font-size: 13px;
-            color: #555;
-        }
+        .form-group { margin-bottom: 12px; }
+        label { display: block; margin-bottom: 5px; font-weight: 600; font-size: 13px; color: #555; }
         input, select {
             width: 100%;
-            padding: 11px;
+            padding: 10px;
             border: 1px solid #ccd1d9;
             border-radius: 6px;
             box-sizing: border-box;
             font-size: 14px;
-            transition: border-color 0.2s;
         }
-        input:focus, select:focus {
-            outline: none;
-            border-color: var(--bemol-blue);
-            box-shadow: 0 0 0 3px rgba(0,86,179,0.1);
-        }
-        button {
+        button.btn-submit {
             background-color: var(--bemol-orange);
             color: white;
             border: none;
-            padding: 14px 20px;
+            padding: 12px;
             font-size: 16px;
             border-radius: 6px;
             cursor: pointer;
             width: 100%;
             font-weight: bold;
-            transition: opacity 0.2s;
+            grid-column: span 3;
         }
-        button:hover {
-            opacity: 0.9;
-        }
+        button.btn-submit:hover { opacity: 0.9; }
+        .filters { display: flex; gap: 15px; margin-bottom: 15px; }
+        .filters input, .filters select { max-width: 250px; }
         table {
             width: 100%;
             border-collapse: collapse;
             margin-top: 10px;
             font-size: 13px;
         }
-        th, td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #eaeaea;
-        }
-        th {
-            background-color: #f8f9fa;
-            color: #444;
-            font-weight: 600;
-        }
-        .badge {
-            background-color: #e2f0d9;
-            color: #385723;
-            padding: 5px 10px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: bold;
-        }
-        .badge-alto-valor {
-            background-color: #fce4d6;
-            color: #c65911;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-weight: bold;
-        }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eaeaea; }
+        th { background-color: #f8f9fa; color: #444; font-weight: 600; }
+        .badge-etapa { background-color: #e2f0d9; color: #385723; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: bold; }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
-    <div class="container">
+
+    <!-- ECRÃ DE LOGIN -->
+    <div id="loginScreen" class="login-wrapper">
+        <div class="login-card">
+            <h2>CD Marketplace</h2>
+            <p style="font-size: 13px; color: #666; margin-bottom: 20px;">Insira as suas credenciais de acesso</p>
+            <form id="loginForm">
+                <div class="form-group" style="text-align: left;">
+                    <label>Utilizador</label>
+                    <input type="text" id="loginUser" required placeholder="admin, cd01 ou comercial">
+                </div>
+                <div class="form-group" style="text-align: left;">
+                    <label>Senha</label>
+                    <input type="password" id="loginPass" required placeholder="********">
+                </div>
+                <button type="submit" class="btn-submit" style="grid-column: span 1; width: 100%; margin-top: 10px;">Entrar no Portal</button>
+            </form>
+            <div id="loginError" style="color: red; font-size: 12px; margin-top: 10px;"></div>
+        </div>
+    </div>
+
+    <!-- PAINEL PRINCIPAL -->
+    <div id="appScreen" class="container hidden">
         <header>
-            <h1>Portal de Agendamento - CD Marketplace</h1>
-            <p>Logística de Alto Valor e Gestão de Inventário</p>
+            <div>
+              <h1>Portal Logístico | CD Marketplace</h1>
+              <p id="roleTitle" style="margin: 5px 0 0 0; font-size: 13px; opacity: 0.8;"></p>
+            </div>
+            <div class="user-info">
+              <span id="userNameDisplay"></span><br>
+              <button onclick="logout()">Terminar Sessão</button>
+            </div>
         </header>
 
-        <div class="card">
-            <h2>Registar Novo Agendamento de Carga</h2>
-            <form id="agendamentoForm">
+        <!-- SECÇÃO DE REGISTO (Admin e CD) -->
+        <div id="cardRegisto" class="card">
+            <h2>Registar Nova Operação / Agendamento</h2>
+            <form id="operacaoForm">
                 <div class="form-grid">
                     <div class="form-group">
-                        <label for="transportadora">Transportadora</label>
-                        <input type="text" id="transportadora" required placeholder="Ex: Logística Express">
+                        <label>Seller / Lojista</label>
+                        <input type="text" id="seller" required placeholder="Nome do Seller">
                     </div>
                     <div class="form-group">
-                        <label for="motorista">Nome do Motorista</label>
-                        <input type="text" id="motorista" required placeholder="Nome completo">
+                        <label>Transportadora</label>
+                        <input type="text" id="transportadora" required placeholder="Ex: LATAM / KM Cargo">
                     </div>
                     <div class="form-group">
-                        <label for="veiculo_placa">Placa do Veículo</label>
+                        <label>Motorista</label>
+                        <input type="text" id="motorista" required placeholder="Nome do motorista">
+                    </div>
+                    <div class="form-group">
+                        <label>Placa do Veículo</label>
                         <input type="text" id="veiculo_placa" required placeholder="Ex: PHX-8A32">
                     </div>
                     <div class="form-group">
-                        <label for="nota_fiscal">Nota Fiscal (NF)</label>
+                        <label>Nota Fiscal (NF)</label>
                         <input type="text" id="nota_fiscal" required placeholder="Número da NF">
                     </div>
                     <div class="form-group">
-                        <label for="tipo_carga">Tipo de Carga</label>
+                        <label>Tipo de Carga</label>
                         <select id="tipo_carga" required>
-                            <option value="">Selecione o tipo...</option>
-                            <option value="Alto Valor">Alto Valor (Eletrónicos/Joias)</option>
+                            <option value="Alto Valor">Alto Valor</option>
                             <option value="Geral">Carga Geral</option>
                             <option value="Fracionado">Fracionado</option>
                         </select>
                     </div>
                     <div class="form-group">
-                        <label for="data_agendamento">Data e Hora Prevista</label>
+                        <label>Data Prevista</label>
                         <input type="datetime-local" id="data_agendamento" required>
                     </div>
+                    <div class="form-group">
+                        <label>Etapa Atual da Operação</label>
+                        <select id="status_etapa" required>
+                            <option value="Emissão do Pedido">1. Emissão do Pedido</option>
+                            <option value="Faturamento">2. Faturamento</option>
+                            <option value="Coleta Realizada" selected>3. Coleta Realizada</option>
+                            <option value="CT-e Emitido">4. CT-e Emitido</option>
+                            <option value="Embarque">5. Embarque</option>
+                            <option value="Entrega CD">6. Entrega CD</option>
+                            <option value="Entregue ao Cliente">7. Entregue ao Cliente</option>
+                        </select>
+                    </div>
                 </div>
-                <button type="submit">Confirmar Agendamento</button>
+                <button type="submit" class="btn-submit">Guardar Registo de Operação</button>
             </form>
         </div>
 
+        <!-- LISTAGEM E FILTROS -->
         <div class="card">
-            <h2>Agendamentos em Fila (CD)</h2>
+            <h2>Acompanhamento de Pedidos e Coletas por Seller</h2>
+            <div class="filters">
+                <input type="text" id="filtroSeller" placeholder="Filtrar por Seller..." onkeyup="filtrarTabela()">
+                <select id="filtroEtapa" onchange="filtrarTabela()">
+                    <option value="">Todas as Etapas</option>
+                    <option value="Emissão do Pedido">Emissão do Pedido</option>
+                    <option value="Faturamento">Faturamento</option>
+                    <option value="Coleta Realizada">Coleta Realizada</option>
+                    <option value="CT-e Emitido">CT-e Emitido</option>
+                    <option value="Embarque">Embarque</option>
+                    <option value="Entrega CD">Entrega CD</option>
+                    <option value="Entregue ao Cliente">Entregue ao Cliente</option>
+                </select>
+            </div>
             <div style="overflow-x: auto;">
                 <table>
                     <thead>
                         <tr>
                             <th>ID</th>
+                            <th>Seller</th>
                             <th>Transportadora</th>
-                            <th>Motorista</th>
-                            <th>Placa</th>
+                            <th>Motorista / Placa</th>
                             <th>NF</th>
-                            <th>Tipo de Carga</th>
-                            <th>Data/Hora</th>
-                            <th>Status</th>
+                            <th>Carga</th>
+                            <th>Data</th>
+                            <th>Etapa Atual</th>
                         </tr>
                     </thead>
-                    <tbody id="tabelaAgendamentos">
-                        <tr><td colspan="8" style="text-align: center; color: #777;">A carregar agendamentos...</td></tr>
+                    <tbody id="tabelaOperacoes">
+                        <tr><td colspan="8" style="text-align: center;">A carregar dados...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -203,68 +233,121 @@
     </div>
 
     <script>
-        async function carregarAgendamentos() {
+        let dadosGlobais = [];
+        let currentUser = null;
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const username = document.getElementById('loginUser').value;
+            const senha = document.getElementById('loginPass').value;
+
             try {
-                const response = await fetch('/api/agendamentos');
-                const dados = await response.json();
-                const tbody = document.getElementById('tabelaAgendamentos');
-                tbody.innerHTML = '';
-                
-                if (!dados || dados.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #777;">Nenhum agendamento registado no momento.</td></tr>';
-                    return;
-                }
-
-                dados.forEach(item => {
-                    const tr = document.createElement('tr');
-                    const tipoBadge = item.tipo_carga === 'Alto Valor' 
-                        ? `<span class="badge-alto-valor">${item.tipo_carga}</span>` 
-                        : item.tipo_carga;
-
-                    tr.innerHTML = `
-                        <td>#${item.id}</td>
-                        <td><strong>${item.transportadora}</strong></td>
-                        <td>${item.motorista}</td>
-                        <td>${item.veiculo_placa}</td>
-                        <td>${item.nota_fiscal}</td>
-                        <td>${tipoBadge}</td>
-                        <td>${item.data_agendamento}</td>
-                        <td><span class="badge">${item.status || 'Pendente'}</span></td>
-                    `;
-                    tbody.appendChild(tr);
+                const res = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, senha })
                 });
+                const data = await res.json();
+
+                if (data.success) {
+                    currentUser = data;
+                    document.getElementById('loginScreen').classList.add('hidden');
+                    document.getElementById('appScreen').classList.remove('hidden');
+                    document.getElementById('userNameDisplay').innerText = `Utilizador: ${data.username.toUpperCase()}`;
+                    document.getElementById('roleTitle').innerText = `Perfil: ${data.perfil.toUpperCase()}`;
+
+                    if (data.perfil === 'comercial') {
+                        document.getElementById('cardRegisto').classList.add('hidden');
+                    }
+
+                    carregarOperacoes();
+                } else {
+                    document.getElementById('loginError').innerText = data.error || 'Erro no login';
+                }
             } catch (err) {
-                console.error('Erro ao carregar dados:', err);
+                document.getElementById('loginError').innerText = 'Erro de ligação ao servidor.';
+            }
+        });
+
+        function logout() {
+            location.reload();
+        }
+
+        async function carregarOperacoes() {
+            try {
+                const res = await fetch('/api/agendamentos');
+                dadosGlobais = await res.json();
+                renderTabela(dadosGlobais);
+            } catch (err) {
+                console.error('Erro ao carregar:', err);
             }
         }
 
-        document.getElementById('agendamentoForm').addEventListener('submit', async (e) => {
+        function renderTabela(lista) {
+            const tbody = document.getElementById('tabelaOperacoes');
+            tbody.innerHTML = '';
+
+            if (!lista || lista.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #777;">Nenhum registo encontrado.</td></tr>';
+                return;
+            }
+
+            lista.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>#${item.id}</td>
+                    <td><strong>${item.seller}</strong></td>
+                    <td>${item.transportadora}</td>
+                    <td>${item.motorista} <br><small>${item.veiculo_placa}</small></td>
+                    <td>${item.nota_fiscal}</td>
+                    <td>${item.tipo_carga}</td>
+                    <td>${item.data_agendamento}</td>
+                    <td><span class="badge-etapa">${item.status_etapa}</span></td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function filtrarTabela() {
+            const termoSeller = document.getElementById('filtroSeller').value.toLowerCase();
+            const termoEtapa = document.getElementById('filtroEtapa').value;
+
+            const filtrados = dadosGlobais.filter(item => {
+                const matchSeller = item.seller.toLowerCase().includes(termoSeller);
+                const matchEtapa = termoEtapa === '' || item.status_etapa === termoEtapa;
+                return matchSeller && matchEtapa;
+            });
+
+            renderTabela(filtrados);
+        }
+
+        document.getElementById('operacaoForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const payload = {
+                seller: document.getElementById('seller').value,
                 transportadora: document.getElementById('transportadora').value,
                 motorista: document.getElementById('motorista').value,
                 veiculo_placa: document.getElementById('veiculo_placa').value,
                 nota_fiscal: document.getElementById('nota_fiscal').value,
                 tipo_carga: document.getElementById('tipo_carga').value,
-                data_agendamento: document.getElementById('data_agendamento').value
+                data_agendamento: document.getElementById('data_agendamento').value,
+                status_etapa: document.getElementById('status_etapa').value
             };
 
-            const response = await fetch('/api/agendamentos', {
+            const res = await fetch('/api/agendamentos', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
 
-            if (response.ok) {
-                alert('Agendamento efetuado com sucesso para o CD!');
-                document.getElementById('agendamentoForm').reset();
-                carregarAgendamentos();
+            if (res.ok) {
+                alert('Operação registada com sucesso!');
+                document.getElementById('operacaoForm').reset();
+                carregarOperacoes();
             } else {
-                alert('Erro ao efetuar o agendamento.');
+                alert('Erro ao guardar operação.');
             }
         });
-
-        carregarAgendamentos();
     </script>
 </body>
 </html>
