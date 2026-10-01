@@ -51,71 +51,139 @@
         </header>
 
         <main class="max-w-7xl w-full mx-auto p-6 flex-1 space-y-6">
-            <!-- Consultar Status da Operação -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h2 class="text-lg font-semibold text-slate-800 mb-4">Consultar Status da Operação</h2>
-                <form id="consulta-form" onsubmit="consultarOperacao(event)" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                    <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Seller</label>
-                        <select id="filtro_seller" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
-                            <option value="">Selecione o Seller</option>
-                            <option value="Brascol - ONESHOP">Brascol - ONESHOP</option>
-                            <option value="Tramontina">Tramontina</option>
-                            <option value="Vitrola">Vitrola</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Transportadora</label>
-                        <select id="filtro_transportadora" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
-                            <option value="">Selecione a Transportadora</option>
-                            <option value="LATAM">LATAM</option>
-                            <option value="Essencial Cargo">Essencial Cargo</option>
-                        </select>
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Nota Fiscal (NF)</label>
-                        <input type="text" id="filtro_nf" required placeholder="Número da NF" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
-                    </div>
-                    <div>
-                        <button type="submit" class="w-full bg-sky-600 hover:bg-sky-700 text-white font-semibold px-4 py-2 rounded-lg text-sm transition shadow-sm">Pesquisar Status</button>
-                    </div>
-                </form>
+            
+            <!-- Navegação de Abas (Visível conforme perfil) -->
+            <div class="flex space-x-2 border-b border-slate-200 pb-3" id="abas-container">
+                <button onclick="mudarAba('geral')" id="tab-geral" class="px-4 py-2 text-sm font-semibold rounded-lg bg-sky-600 text-white transition">Consulta e Acompanhamento</button>
+                <button onclick="mudarAba('cd-coleta')" id="tab-cd-coleta" class="px-4 py-2 text-sm font-semibold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 transition hidden">📦 Disponível para Coleta (LATAM)</button>
+                <button onclick="mudarAba('admin-painel')" id="tab-admin" class="px-4 py-2 text-sm font-semibold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 transition hidden">⚙️ Painel Admin (Sinalização)</button>
+            </div>
 
-                <!-- Resultado da Consulta (Oculto até pesquisar) -->
-                <div id="resultado-pesquisa" class="hidden mt-6 p-4 bg-sky-50 border border-sky-200 rounded-xl">
-                    <h3 class="text-sm font-bold text-sky-900 mb-2">Resultado da Consulta para a NF: <span id="res-nf" class="text-orange-600"></span></h3>
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        <div><span class="text-xs text-slate-500 block">Etapa Atual da Carga:</span> <span id="res-etapa" class="font-bold text-emerald-700"></span></div>
-                        <div><span class="text-xs text-slate-500 block">Previsão de Entrega:</span> <span id="res-previsao" class="font-semibold text-slate-800"></span></div>
-                        <div><span class="text-xs text-slate-500 block">Tipo de Carga:</span> <span class="font-medium text-slate-700">Marketplace</span></div>
+            <!-- CONTEÚDO DA ABA: CONSULTA E ACOMPANHAMENTO -->
+            <div id="conteudo-geral" class="space-y-6">
+                <!-- Consultar Status da Operação -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h2 class="text-lg font-semibold text-slate-800 mb-4">Consultar Status da Operação</h2>
+                    <form id="consulta-form" onsubmit="consultarOperacao(event)" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">Seller</label>
+                            <select id="filtro_seller" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
+                                <option value="">Selecione o Seller</option>
+                                <option value="Brascol - ONESHOP">Brascol - ONESHOP</option>
+                                <option value="Tramontina">Tramontina</option>
+                                <option value="Vitrola">Vitrola</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">Transportadora</label>
+                            <select id="filtro_transportadora" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
+                                <option value="">Selecione a Transportadora</option>
+                                <option value="LATAM">LATAM</option>
+                                <option value="Essencial Cargo">Essencial Cargo</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">Nota Fiscal (NF)</label>
+                            <input type="text" id="filtro_nf" required placeholder="Número da NF" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-500">
+                        </div>
+                        <div>
+                            <button type="submit" class="w-full bg-sky-600 hover:bg-sky-700 text-white font-semibold px-4 py-2 rounded-lg text-sm transition shadow-sm">Pesquisar Status</button>
+                        </div>
+                    </form>
+
+                    <!-- Resultado da Consulta -->
+                    <div id="resultado-pesquisa" class="hidden mt-6 p-4 bg-sky-50 border border-sky-200 rounded-xl">
+                        <h3 class="text-sm font-bold text-sky-900 mb-2">Resultado da Consulta para a NF: <span id="res-nf" class="text-orange-600"></span></h3>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                            <div><span class="text-xs text-slate-500 block">Etapa Atual da Carga:</span> <span id="res-etapa" class="font-bold text-emerald-700"></span></div>
+                            <div><span class="text-xs text-slate-500 block">Previsão de Entrega:</span> <span id="res-previsao" class="font-semibold text-slate-800"></span></div>
+                            <div><span class="text-xs text-slate-500 block">Status Latam:</span> <span id="res-latam" class="font-semibold text-sky-700"></span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Listagem Completa dos 7 Dias -->
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h2 class="text-lg font-semibold text-slate-800 mb-1">Acompanhamento de Pedidos e Operações por Seller</h2>
+                    <p class="text-xs text-slate-500 mb-4">Histórico completo das operações (Linha do tempo dos 7 dias)</p>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm text-slate-600">
+                            <thead class="bg-slate-100 text-slate-700 uppercase text-xs">
+                                <tr>
+                                    <th class="p-3">Seller</th>
+                                    <th class="p-3">Transportadora</th>
+                                    <th class="p-3">NF</th>
+                                    <th class="p-3">Coleta</th>
+                                    <th class="p-3">Emissão CTe</th>
+                                    <th class="p-3">Embarque</th>
+                                    <th class="p-3">Chegada Prevista</th>
+                                    <th class="p-3">Etapa Atual</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-agendamentos" class="divide-y divide-slate-200">
+                                <tr><td colspan="8" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
 
-            <!-- Listagem Completa dos 7 Dias -->
-            <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
-                <h2 class="text-lg font-semibold text-slate-800 mb-1">Acompanhamento de Pedidos e Operações por Seller</h2>
-                <p class="text-xs text-slate-500 mb-4">Histórico completo das operações (Linha do tempo dos 7 dias)</p>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-left text-sm text-slate-600">
-                        <thead class="bg-slate-100 text-slate-700 uppercase text-xs">
-                            <tr>
-                                <th class="p-3">Seller</th>
-                                <th class="p-3">Transportadora</th>
-                                <th class="p-3">NF</th>
-                                <th class="p-3">Coleta</th>
-                                <th class="p-3">Emissão CTe</th>
-                                <th class="p-3">Embarque</th>
-                                <th class="p-3">Chegada Prevista</th>
-                                <th class="p-3">Etapa Atual</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tabela-agendamentos" class="divide-y divide-slate-200">
-                            <tr><td colspan="8" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>
-                        </tbody>
-                    </table>
+            <!-- CONTEÚDO DA ABA: CD - DISPONÍVEL PARA COLETA (LATAM) -->
+            <div id="conteudo-cd-coleta" class="space-y-6 hidden">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <div class="flex justify-between items-center mb-4">
+                        <div>
+                            <h2 class="text-lg font-semibold text-slate-800">Cargas Disponíveis para Coleta — LATAM</h2>
+                            <p class="text-xs text-slate-500">Operações sinalizadas pelo Administrador como liberadas para coleta na transportadora LATAM</p>
+                        </div>
+                        <span class="bg-sky-100 text-sky-800 text-xs px-3 py-1 rounded-full font-bold">CD01 / Operacional</span>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm text-slate-600">
+                            <thead class="bg-sky-50 text-sky-900 uppercase text-xs">
+                                <tr>
+                                    <th class="p-3">Seller</th>
+                                    <th class="p-3">NF</th>
+                                    <th class="p-3">Data de Coleta</th>
+                                    <th class="p-3">Emissão CTe</th>
+                                    <th class="p-3">Previsão Chegada</th>
+                                    <th class="p-3">Estado no CD</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-cd-latam" class="divide-y divide-slate-200">
+                                <tr><td colspan="6" class="p-4 text-center text-slate-400">A carregar cargas disponíveis...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
+
+            <!-- CONTEÚDO DA ABA: PAINEL ADMIN (SINALIZAÇÃO) -->
+            <div id="conteudo-admin" class="space-y-6 hidden">
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+                    <h2 class="text-lg font-semibold text-slate-800 mb-1">Painel Administrativo — Sinalização LATAM</h2>
+                    <p class="text-xs text-slate-500 mb-4">Selecione as NFs transportadas pela LATAM para sinalizar a liberação de coleta para o CD.</p>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm text-slate-600">
+                            <thead class="bg-slate-100 text-slate-700 uppercase text-xs">
+                                <tr>
+                                    <th class="p-3">Seller</th>
+                                    <th class="p-3">Transportadora</th>
+                                    <th class="p-3">NF</th>
+                                    <th class="p-3">Data Coleta</th>
+                                    <th class="p-3">Status Atual Latam</th>
+                                    <th class="p-3 text-center">Ação / Sinalização</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tabela-admin-sinalizacao" class="divide-y divide-slate-200">
+                                <tr><td colspan="6" class="p-4 text-center text-slate-400">A carregar painel admin...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
         </main>
     </div>
 
@@ -138,10 +206,10 @@
                 if (data.success) {
                     currentUser = data;
                     localStorage.setItem('user', JSON.stringify(data));
-                    document.getElementById('user-profile-badge').innerText = `${currentUser.username} (${currentUser.perfil})`;
+                    aplicarPermissoesPerfil();
                     document.getElementById('login-screen').classList.add('hidden');
                     document.getElementById('app-screen').classList.remove('hidden');
-                    carregarAgendamentos();
+                    carregarDados();
                 } else {
                     document.getElementById('login-error').classList.remove('hidden');
                 }
@@ -150,9 +218,42 @@
             }
         }
 
+        function aplicarPermissoesPerfil() {
+            document.getElementById('user-profile-badge').innerText = `${currentUser.username} (${currentUser.perfil})`;
+            
+            // Mostrar abas específicas por perfil
+            if (currentUser.perfil === 'admin' || currentUser.perfil === 'cd') {
+                document.getElementById('tab-cd-coleta').classList.remove('hidden');
+            }
+            if (currentUser.perfil === 'admin') {
+                document.getElementById('tab-admin').classList.remove('hidden');
+            }
+        }
+
         function terminarSessao() {
             localStorage.removeItem('user');
             location.reload();
+        }
+
+        function mudarAba(aba) {
+            document.getElementById('conteudo-geral').classList.add('hidden');
+            document.getElementById('conteudo-cd-coleta').classList.add('hidden');
+            document.getElementById('conteudo-admin').classList.add('hidden');
+
+            document.getElementById('tab-geral').className = "px-4 py-2 text-sm font-semibold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 transition";
+            document.getElementById('tab-cd-coleta').className = "px-4 py-2 text-sm font-semibold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 transition";
+            document.getElementById('tab-admin').className = "px-4 py-2 text-sm font-semibold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 transition";
+
+            if (aba === 'geral') {
+                document.getElementById('conteudo-geral').classList.remove('hidden');
+                document.getElementById('tab-geral').className = "px-4 py-2 text-sm font-semibold rounded-lg bg-sky-600 text-white transition";
+            } else if (aba === 'cd-coleta') {
+                document.getElementById('conteudo-cd-coleta').classList.remove('hidden');
+                document.getElementById('tab-cd-coleta').className = "px-4 py-2 text-sm font-semibold rounded-lg bg-sky-600 text-white transition";
+            } else if (aba === 'admin-painel') {
+                document.getElementById('conteudo-admin').classList.remove('hidden');
+                document.getElementById('tab-admin').className = "px-4 py-2 text-sm font-semibold rounded-lg bg-sky-600 text-white transition";
+            }
         }
 
         async function consultarOperacao(e) {
@@ -164,7 +265,6 @@
             const res = await fetch('/api/agendamentos');
             const lista = await res.json();
 
-            // Procurar correspondência
             const encontrada = lista.find(item => 
                 item.seller === seller && 
                 item.transportadora === transportadora && 
@@ -177,46 +277,105 @@
             if (encontrada) {
                 document.getElementById('res-nf').innerText = encontrada.nota_fiscal;
                 document.getElementById('res-etapa').innerText = encontrada.status_etapa;
-                document.getElementById('res-previsao').innerText = new Date(encontrada.data_agendamento).toLocaleString('pt-BR');
+                document.getElementById('res-previsao').innerText = new Date(encontrada.data_agendamento).toLocaleDateString('pt-BR');
+                document.getElementById('res-latam').innerText = encontrada.liberado_latam ? "Liberado para Coleta 🟢" : "Aguardando Liberação Admin ⏳";
             } else {
                 document.getElementById('res-nf').innerText = nf;
                 document.getElementById('res-etapa').innerText = "Em Trânsito / Aguardando Atualização CD";
                 document.getElementById('res-previsao').innerText = "Previsão em 48h";
+                document.getElementById('res-latam').innerText = "Não aplicável";
             }
         }
 
-        async function carregarAgendamentos() {
+        async function carregarDados() {
             const res = await fetch('/api/agendamentos');
             const lista = await res.json();
-            const tbody = document.getElementById('tabela-agendamentos');
             
+            // 1. Tabela Geral dos 7 Dias
+            const tbodyGeral = document.getElementById('tabela-agendamentos');
             if (lista.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-slate-400">Nenhum registo encontrado.</td></tr>`;
-                return;
+                tbodyGeral.innerHTML = `<tr><td colspan="8" class="p-4 text-center text-slate-400">Nenhum registo encontrado.</td></tr>`;
+            } else {
+                tbodyGeral.innerHTML = lista.map(item => `
+                    <tr class="hover:bg-slate-50">
+                        <td class="p-3 font-medium text-slate-900">${item.seller}</td>
+                        <td class="p-3">${item.transportadora}</td>
+                        <td class="p-3 font-semibold text-sky-600">${item.nota_fiscal}</td>
+                        <td class="p-3">${item.data_coleta || '01/10/2026'}</td>
+                        <td class="p-3">${item.data_cte || '02/10/2026'}</td>
+                        <td class="p-3">${item.data_embarque || '03/10/2026'}</td>
+                        <td class="p-3 font-medium text-slate-700">${new Date(item.data_agendamento).toLocaleDateString('pt-BR')}</td>
+                        <td class="p-3"><span class="bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded font-medium">${item.status_etapa}</span></td>
+                    </tr>
+                `).join('');
             }
 
-            tbody.innerHTML = lista.map(item => `
-                <tr class="hover:bg-slate-50">
-                    <td class="p-3 font-medium text-slate-900">${item.seller}</td>
-                    <td class="p-3">${item.transportadora}</td>
-                    <td class="p-3 font-semibold text-sky-600">${item.nota_fiscal}</td>
-                    <td class="p-3">${item.data_coleta || '01/10/2026'}</td>
-                    <td class="p-3">${item.data_cte || '02/10/2026'}</td>
-                    <td class="p-3">${item.data_embarque || '03/10/2026'}</td>
-                    <td class="p-3 font-medium text-slate-700">${new Date(item.data_agendamento).toLocaleDateString('pt-BR')}</td>
-                    <td class="p-3"><span class="bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded font-medium">${item.status_etapa}</span></td>
-                </tr>
-            `).join('');
+            // 2. Tabela CD: Disponível para Coleta LATAM (Apenas itens liberados da LATAM)
+            const latamDisponiveis = lista.filter(item => item.transportadora === 'LATAM' && item.liberado_latam);
+            const tbodyCd = document.getElementById('tabela-cd-latam');
+            if (latamDisponiveis.length === 0) {
+                tbodyCd.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhuma carga LATAM liberada para coleta no momento.</td></tr>`;
+            } else {
+                tbodyCd.innerHTML = latamDisponiveis.map(item => `
+                    <tr class="hover:bg-sky-50">
+                        <td class="p-3 font-medium text-slate-900">${item.seller}</td>
+                        <td class="p-3 font-semibold text-sky-600">${item.nota_fiscal}</td>
+                        <td class="p-3">${item.data_coleta || '01/10/2026'}</td>
+                        <td class="p-3">${item.data_cte || '02/10/2026'}</td>
+                        <td class="p-3 font-medium text-slate-700">${new Date(item.data_agendamento).toLocaleDateString('pt-BR')}</td>
+                        <td class="p-3"><span class="bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded font-bold">Disponível para Recolha</span></td>
+                    </tr>
+                `).join('');
+            }
+
+            // 3. Tabela Admin: Sinalização
+            const tbodyAdmin = document.getElementById('tabela-admin-sinalizacao');
+            const latamAdmin = lista.filter(item => item.transportadora === 'LATAM');
+            if (latamAdmin.length === 0) {
+                tbodyAdmin.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhuma carga LATAM registada.</td></tr>`;
+            } else {
+                tbodyAdmin.innerHTML = latamAdmin.map(item => `
+                    <tr class="hover:bg-slate-50">
+                        <td class="p-3 font-medium text-slate-900">${item.seller}</td>
+                        <td class="p-3">${item.transportadora}</td>
+                        <td class="p-3 font-semibold text-sky-600">${item.nota_fiscal}</td>
+                        <td class="p-3">${item.data_coleta || '01/10/2026'}</td>
+                        <td class="p-3"><span class="${item.liberado_latam ? 'text-emerald-600 font-semibold' : 'text-orange-500'}">${item.liberado_latam ? 'Liberado' : 'Pendente Liberação'}</span></td>
+                        <td class="p-3 text-center">
+                            <button onclick="alternarLiberacaoLatam(${item.id}, ${!item.liberado_latam})" class="px-3 py-1.5 rounded text-xs font-semibold ${item.liberado_latam ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-emerald-600 text-emerald-100 hover:bg-emerald-700'} transition">
+                                ${item.liberado_latam ? 'Revogar Liberação' : 'Liberar para Coleta'}
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        async function alternarLiberacaoLatam(id, novoEstado) {
+            try {
+                const res = await fetch(`/api/agendamentos/${id}/latam`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ liberado_latam: novoEstado })
+                });
+                if (res.ok) {
+                    carregarDados();
+                } else {
+                    alert('Erro ao atualizar status.');
+                }
+            } catch (err) {
+                alert('Erro de ligação ao servidor.');
+            }
         }
 
         window.onload = () => {
             const savedUser = localStorage.getItem('user');
             if (savedUser) {
                 currentUser = JSON.parse(savedUser);
-                document.getElementById('user-profile-badge').innerText = `${currentUser.username} (${currentUser.perfil})`;
+                aplicarPermissoesPerfil();
                 document.getElementById('login-screen').classList.add('hidden');
                 document.getElementById('app-screen').classList.remove('hidden');
-                carregarAgendamentos();
+                carregarDados();
             }
         };
     </script>
