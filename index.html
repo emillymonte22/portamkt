@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal de Agendamento - CD Marketplace</title>
+    <style>
+        :root {
+            --primary-color: #0066cc;
+            --bg-color: #f4f6f9;
+            --card-bg: #ffffff;
+            --text-color: #333333;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        header {
+            background-color: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        h1 {
+            margin: 0;
+            color: var(--primary-color);
+            font-size: 24px;
+        }
+        .card {
+            background-color: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        h2 {
+            font-size: 18px;
+            margin-top: 0;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            font-weight: bold;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f8f9fa;
+        }
+        .badge {
+            background-color: #ffc107;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Portal de Agendamento de Carga</h1>
+            <p>Centro de Distribuição - Marketplace</p>
+        </header>
+
+        <div class="card">
+            <h2>Novo Agendamento</h2>
+            <form id="agendamentoForm">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label for="transportadora">Transportadora</label>
+                        <input type="text" id="transportadora" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="motorista">Nome do Motorista</label>
+                        <input type="text" id="motorista" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="veiculo_placa">Placa do Veículo</label>
+                        <input type="text" id="veiculo_placa" required placeholder="Ex: ABC-1234">
+                    </div>
+                    <div class="form-group">
+                        <label for="nota_fiscal">Nota Fiscal (NF)</label>
+                        <input type="text" id="nota_fiscal" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="tipo_carga">Tipo de Carga</label>
+                        <select id="tipo_carga" required>
+                            <option value="">Selecione...</option>
+                            <option value="Alto Valor">Alto Valor</option>
+                            <option value="Geral">Geral</option>
+                            <option value="Fracionado">Fracionado</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="data_agendamento">Data e Hora</label>
+                        <input type="datetime-local" id="data_agendamento" required>
+                    </div>
+                </div>
+                <button type="submit">Efetuar Agendamento</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Agendamentos Recentes</h2>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Transportadora</th>
+                            <th>Motorista</th>
+                            <th>Placa</th>
+                            <th>NF</th>
+                            <th>Tipo</th>
+                            <th>Data</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaAgendamentos">
+                        <tr><td colspan="8" style="text-align: center;">A carregar agendamentos...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function carregarAgendamentos() {
+            try {
+                const response = await fetch('/api/agendamentos');
+                const dados = await response.json();
+                const tbody = document.getElementById('tabelaAgendamentos');
+                tbody.innerHTML = '';
+                
+                if (dados.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Nenhum agendamento registado.</td></tr>';
+                    return;
+                }
+
+                dados.forEach(item => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${item.id}</td>
+                        <td>${item.transportadora}</td>
+                        <td>${item.motorista}</td>
+                        <td>${item.veiculo_placa}</td>
+                        <td>${item.nota_fiscal}</td>
+                        <td>${item.tipo_carga}</td>
+                        <td>${item.data_agendamento}</td>
+                        <td><span class="badge">${item.status || 'Pendente'}</span></td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } catch (err) {
+                console.error('Erro ao carregar dados:', err);
+            }
+        }
+
+        document.getElementById('agendamentoForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const payload = {
+                transportadora: document.getElementById('transportadora').value,
+                motorista: document.getElementById('motorista').value,
+                veiculo_placa: document.getElementById('veiculo_placa').value,
+                nota_fiscal: document.getElementById('nota_fiscal').value,
+                tipo_carga: document.getElementById('tipo_carga').value,
+                data_agendamento: document.getElementById('data_agendamento').value
+            };
+
+            const response = await fetch('/api/agendamentos', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (response.ok) {
+                alert('Agendamento efetuado com sucesso!');
+                document.getElementById('agendamentoForm').reset();
+                carregarAgendamentos();
+            } else {
+                alert('Erro ao efetuar agendamento.');
+            }
+        });
+
+        carregarAgendamentos();
+    </script>
+</body>
+</html>
