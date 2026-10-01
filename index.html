@@ -52,7 +52,7 @@
 
         <main class="max-w-7xl w-full mx-auto p-6 flex-1 space-y-6">
             
-            <!-- Navegação de Abas (Visível conforme perfil) -->
+            <!-- Navegação de Abas (Com restrição estrita por perfil) -->
             <div class="flex space-x-2 border-b border-slate-200 pb-3" id="abas-container">
                 <button onclick="mudarAba('geral')" id="tab-geral" class="px-4 py-2 text-sm font-semibold rounded-lg bg-sky-600 text-white transition">Consulta e Acompanhamento</button>
                 <button onclick="mudarAba('cd-coleta')" id="tab-cd-coleta" class="px-4 py-2 text-sm font-semibold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 transition hidden">📦 Disponível para Coleta (LATAM)</button>
@@ -128,7 +128,7 @@
                 </div>
             </div>
 
-            <!-- CONTEÚDO DA ABA: CD - DISPONÍVEL PARA COLETA (LATAM) -->
+            <!-- CONTEÚDO DA ABA: CD — DISPONÍVEL PARA COLETA (LATAM) -->
             <div id="conteudo-cd-coleta" class="space-y-6 hidden">
                 <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                     <div class="flex justify-between items-center mb-4">
@@ -158,11 +158,11 @@
                 </div>
             </div>
 
-            <!-- CONTEÚDO DA ABA: PAINEL ADMIN (SINALIZAÇÃO) -->
+            <!-- CONTEÚDO DA ABA: PAINEL ADMIN (EXCLUSIVO ADMIN) -->
             <div id="conteudo-admin" class="space-y-6 hidden">
                 <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                     <h2 class="text-lg font-semibold text-slate-800 mb-1">Painel Administrativo — Sinalização LATAM</h2>
-                    <p class="text-xs text-slate-500 mb-4">Selecione as NFs transportadas pela LATAM para sinalizar a liberação de coleta para o CD.</p>
+                    <p class="text-xs text-slate-500 mb-4">Exclusivo Administrador: Selecione as NFs transportadas pela LATAM para sinalizar a liberação de coleta para o CD.</p>
                     
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-sm text-slate-600">
@@ -221,12 +221,22 @@
         function aplicarPermissoesPerfil() {
             document.getElementById('user-profile-badge').innerText = `${currentUser.username} (${currentUser.perfil})`;
             
-            // Mostrar abas específicas por perfil
-            if (currentUser.perfil === 'admin' || currentUser.perfil === 'cd') {
-                document.getElementById('tab-cd-coleta').classList.remove('hidden');
+            // Restrição de Abas por Perfil
+            const tabCd = document.getElementById('tab-cd-coleta');
+            const tabAdmin = document.getElementById('tab-admin');
+
+            // CD01 / Operacional vê a aba de Coleta LATAM
+            if (currentUser.perfil === 'cd' || currentUser.perfil === 'admin') {
+                tabCd.classList.remove('hidden');
+            } else {
+                tabCd.classList.add('hidden');
             }
+
+            // Administrador vê exclusivamente a aba do Painel Admin
             if (currentUser.perfil === 'admin') {
-                document.getElementById('tab-admin').classList.remove('hidden');
+                tabAdmin.classList.remove('hidden');
+            } else {
+                tabAdmin.classList.add('hidden');
             }
         }
 
@@ -241,18 +251,21 @@
             document.getElementById('conteudo-admin').classList.add('hidden');
 
             document.getElementById('tab-geral').className = "px-4 py-2 text-sm font-semibold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 transition";
-            document.getElementById('tab-cd-coleta').className = "px-4 py-2 text-sm font-semibold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 transition";
-            document.getElementById('tab-admin').className = "px-4 py-2 text-sm font-semibold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 transition";
+            const tabCd = document.getElementById('tab-cd-coleta');
+            if(tabCd) tabCd.className = "px-4 py-2 text-sm font-semibold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 transition";
+            
+            const tabAdmin = document.getElementById('tab-admin');
+            if(tabAdmin) tabAdmin.className = "px-4 py-2 text-sm font-semibold rounded-lg bg-slate-200 text-slate-700 hover:bg-slate-300 transition";
 
             if (aba === 'geral') {
                 document.getElementById('conteudo-geral').classList.remove('hidden');
                 document.getElementById('tab-geral').className = "px-4 py-2 text-sm font-semibold rounded-lg bg-sky-600 text-white transition";
             } else if (aba === 'cd-coleta') {
                 document.getElementById('conteudo-cd-coleta').classList.remove('hidden');
-                document.getElementById('tab-cd-coleta').className = "px-4 py-2 text-sm font-semibold rounded-lg bg-sky-600 text-white transition";
+                if(tabCd) tabCd.className = "px-4 py-2 text-sm font-semibold rounded-lg bg-sky-600 text-white transition";
             } else if (aba === 'admin-painel') {
                 document.getElementById('conteudo-admin').classList.remove('hidden');
-                document.getElementById('tab-admin').className = "px-4 py-2 text-sm font-semibold rounded-lg bg-sky-600 text-white transition";
+                if(tabAdmin) tabAdmin.className = "px-4 py-2 text-sm font-semibold rounded-lg bg-sky-600 text-white transition";
             }
         }
 
@@ -310,7 +323,7 @@
                 `).join('');
             }
 
-            // 2. Tabela CD: Disponível para Coleta LATAM (Apenas itens liberados da LATAM)
+            // 2. Tabela CD: Disponível para Coleta LATAM
             const latamDisponiveis = lista.filter(item => item.transportadora === 'LATAM' && item.liberado_latam);
             const tbodyCd = document.getElementById('tabela-cd-latam');
             if (latamDisponiveis.length === 0) {
@@ -328,26 +341,28 @@
                 `).join('');
             }
 
-            // 3. Tabela Admin: Sinalização
-            const tbodyAdmin = document.getElementById('tabela-admin-sinalizacao');
-            const latamAdmin = lista.filter(item => item.transportadora === 'LATAM');
-            if (latamAdmin.length === 0) {
-                tbodyAdmin.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhuma carga LATAM registada.</td></tr>`;
-            } else {
-                tbodyAdmin.innerHTML = latamAdmin.map(item => `
-                    <tr class="hover:bg-slate-50">
-                        <td class="p-3 font-medium text-slate-900">${item.seller}</td>
-                        <td class="p-3">${item.transportadora}</td>
-                        <td class="p-3 font-semibold text-sky-600">${item.nota_fiscal}</td>
-                        <td class="p-3">${item.data_coleta || '01/10/2026'}</td>
-                        <td class="p-3"><span class="${item.liberado_latam ? 'text-emerald-600 font-semibold' : 'text-orange-500'}">${item.liberado_latam ? 'Liberado' : 'Pendente Liberação'}</span></td>
-                        <td class="p-3 text-center">
-                            <button onclick="alternarLiberacaoLatam(${item.id}, ${!item.liberado_latam})" class="px-3 py-1.5 rounded text-xs font-semibold ${item.liberado_latam ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-emerald-600 text-emerald-100 hover:bg-emerald-700'} transition">
-                                ${item.liberado_latam ? 'Revogar Liberação' : 'Liberar para Coleta'}
-                            </button>
-                        </td>
-                    </tr>
-                `).join('');
+            // 3. Tabela Admin (Se perfil for admin)
+            if (currentUser && currentUser.perfil === 'admin') {
+                const tbodyAdmin = document.getElementById('tabela-admin-sinalizacao');
+                const latamAdmin = lista.filter(item => item.transportadora === 'LATAM');
+                if (latamAdmin.length === 0) {
+                    tbodyAdmin.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhuma carga LATAM registada.</td></tr>`;
+                } else {
+                    tbodyAdmin.innerHTML = latamAdmin.map(item => `
+                        <tr class="hover:bg-slate-50">
+                            <td class="p-3 font-medium text-slate-900">${item.seller}</td>
+                            <td class="p-3">${item.transportadora}</td>
+                            <td class="p-3 font-semibold text-sky-600">${item.nota_fiscal}</td>
+                            <td class="p-3">${item.data_coleta || '01/10/2026'}</td>
+                            <td class="p-3"><span class="${item.liberado_latam ? 'text-emerald-600 font-semibold' : 'text-orange-500'}">${item.liberado_latam ? 'Liberado' : 'Pendente Liberação'}</span></td>
+                            <td class="p-3 text-center">
+                                <button onclick="alternarLiberacaoLatam(${item.id}, ${!item.liberado_latam})" class="px-3 py-1.5 rounded text-xs font-semibold ${item.liberado_latam ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-emerald-600 text-emerald-100 hover:bg-emerald-700'} transition">
+                                    ${item.liberado_latam ? 'Revogar Liberação' : 'Liberar para Coleta'}
+                                </button>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
             }
         }
 
