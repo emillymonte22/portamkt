@@ -184,31 +184,54 @@ async function alterarLiberacaoLatam(request, env, id) {
 async function listarEntregas(env, p) {
   const filtros = [];
   const valores = [];
-  const filtrar = (sql, valor) => { if (valor) { filtros.push(sql); valores.push(valor); } };
 
-  filtrar('n_fornecedor = ?', p.get('seller'));
-  filtrar('no_prazo = ?', p.get('status'));
-  filtrar('dt_pedido >= ?', p.get('de'));
-  filtrar('dt_pedido <= ?', p.get('ate'));
+  const seller = p.get('seller');
+  if (seller) {
+    filtros.push('n_fornecedor = ?');
+    valores.push(seller);
+  }
+
+  const status = p.get('status');
+  if (status && status !== 'Todos') {
+    filtros.push('no_prazo = ?');
+    valores.push(status);
+  }
+
+  const de = p.get('de');
+  if (de) {
+    filtros.push('dt_pedido >= ?');
+    valores.push(de);
+  }
+
+  const ate = p.get('ate');
+  if (ate) {
+    filtros.push('dt_pedido <= ?');
+    valores.push(ate);
+  }
+
   const busca = (p.get('busca') || '').trim();
-  if (/^\d{1,18}$/.test(busca)) {
-    // Um número pode ser NF, pedido ou ordem; a NF do tracking tem 10 dígitos com zeros à esquerda
-    const n = Number(busca);
-    filtrar('(nf = ? OR pedido = ? OR ordem = ? OR nota_fiscal_explode = ?)');
-    valores.push(n, n, n, nfTracking(busca));
-  } else if (busca) {
-    return erro(400, 'Busque por número de NF, pedido ou ordem');
+  if (busca) {
+    if (/^\d{1,18}$/.test(busca)) {
+      const n = Number(busca);
+      const nfStr = nfTracking(busca);
+      filtros.push('(nf = ? OR pedido = ? OR ordem = ? OR nota_fiscal_explode = ?)');
+      valores.push(n, n, n, nfStr);
+    } else {
+      return erro(400, 'Busque por número de NF, pedido ou ordem');
+    }
   }
 
   const where = filtros.length ? `WHERE ${filtros.join(' AND ')}` : '';
   const pagina = Math.max(1, parseInt(p.get('pagina'), 10) || 1);
 
-  const total = await env.DB.prepare(`SELECT COUNT(*) AS n FROM entregas_mkt ${where}`).bind(...valores).first('n');
+  const totalRes = await env.DB.prepare(`SELECT COUNT(*) AS n FROM entregas_mkt ${where}`).bind(...valores).first('n');
+  const total = totalRes || 0;
+
   const { results } = await env.DB.prepare(
     `SELECT * FROM entregas_mkt ${where} ORDER BY dt_pedido DESC, pedido DESC LIMIT ? OFFSET ?`
   ).bind(...valores, ITENS_POR_PAGINA, (pagina - 1) * ITENS_POR_PAGINA).all();
 
-  return Response.json({ itens: results, total, pagina, por_pagina: ITENS_POR_PAGINA });
+  return Response.json({ itens: results || [], total, pagina, por_pagina: ITENS_POR_PAGINA });
 }
 
 async function filtrosEntregas(env) {
@@ -225,7 +248,7 @@ async function listarTracking(env, p) {
   const { results } = await env.DB.prepare(
     'SELECT * FROM tracking_aereo WHERE nota_fiscal_explode = ? ORDER BY descricao_material'
   ).bind(nfTracking(nf)).all();
-  return Response.json(results);
+  return Response.json(results || []);
 }
 
 function nfTracking(nf) {
@@ -236,7 +259,7 @@ async function statusSync(env) {
   const { results } = await env.DB.prepare(
     'SELECT tabela, MAX(executado_em) AS executado_em FROM sync_log GROUP BY tabela'
   ).all();
-  return Response.json(results);
+  return Response.json(results || []);
 }
 
 function erro(status, mensagem) {
