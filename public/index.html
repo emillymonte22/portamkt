@@ -1,529 +1,604 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portal Logístico - Bemol Marketplace</title>
-    <script src="https://cdn.tailwindcss.com"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal Logístico - Bemol Marketplace</title>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-slate-100 text-slate-800 font-sans min-h-screen flex flex-col">
 
-    <!-- Ecrã de Login -->
-    <div id="login-screen" class="hidden fixed inset-0 bg-[#003366] flex flex-col items-center justify-center z-50 p-4">
-        <div class="mb-6 text-center">
-            <img src="https://bemol.vteximg.com.br/arquivos/lp-conta-bemol-marca-bemol.png" alt="Bemol" class="h-12 md:h-14 mx-auto object-contain drop-shadow-md bg-white p-2 rounded-lg">
-            <p class="text-sky-200 text-xs md:text-sm mt-3 uppercase tracking-widest font-semibold">Portal Logístico</p>
-        </div>
+    <!-- Ecrã de Login -->
+    <div id="login-screen" class="hidden fixed inset-0 bg-[#003366] flex flex-col items-center justify-center z-50 p-4">
+        <div class="mb-6 text-center">
+            <img src="https://bemol.vteximg.com.br/arquivos/lp-conta-bemol-marca-bemol.png" alt="Bemol" class="h-12 md:h-14 mx-auto object-contain drop-shadow-md bg-white p-2 rounded-lg">
+            <p class="text-sky-200 text-xs md:text-sm mt-3 uppercase tracking-widest font-semibold">Portal Logístico</p>
+        </div>
 
-        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md border border-sky-100">
-            <h2 class="text-xl font-bold text-slate-800 mb-1 text-center">Acesso Restrito</h2>
-            <p class="text-xs text-slate-500 mb-6 text-center">Insira as suas credenciais para aceder ao sistema</p>
+        <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md border border-sky-100">
+            <h2 class="text-xl font-bold text-slate-800 mb-1 text-center">Acesso Restrito</h2>
+            <p class="text-xs text-slate-500 mb-6 text-center">Insira as suas credenciais para aceder ao sistema</p>
 
-            <form id="login-form" onsubmit="fazerLogin(event)" class="space-y-4">
-                <div>
-                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Utilizador</label>
-                    <input type="text" id="username" required autocomplete="username" placeholder="Digite o seu utilizador" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-600">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Senha</label>
-                    <input type="password" id="senha" required autocomplete="current-password" placeholder="••••••••" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-600">
-                </div>
-                <button type="submit" class="w-full bg-[#003366] hover:bg-sky-800 text-white py-3 rounded-lg font-semibold shadow-md transition duration-200">Entrar no Portal</button>
-                <p id="login-error" class="text-red-500 text-xs text-center hidden mt-2"></p>
-            </form>
-        </div>
-        <footer class="mt-8 text-sky-200 text-xs">
-            &copy; 2026 Bemol — Gestão de Operações de Alto Valor
-        </footer>
-    </div>
+            <form id="login-form" onsubmit="fazerLogin(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Utilizador</label>
+                    <input type="text" id="username" required autocomplete="username" placeholder="Digite o seu utilizador" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-600">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Senha</label>
+                    <input type="password" id="senha" required autocomplete="current-password" placeholder="••••••••" class="w-full px-4 py-2.5 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-sky-600">
+                </div>
+                <button type="submit" class="w-full bg-[#003366] hover:bg-sky-800 text-white py-3 rounded-lg font-semibold shadow-md transition duration-200">Entrar no Portal</button>
+                <p id="login-error" class="text-red-500 text-xs text-center hidden mt-2"></p>
+            </form>
+        </div>
+        <footer class="mt-8 text-sky-200 text-xs">
+            &copy; 2026 Bemol — Gestão de Operações de Alto Valor
+        </footer>
+    </div>
 
-    <!-- Painel Principal com Menu Lateral -->
-    <div id="app-screen" class="hidden flex-1 flex flex-row min-h-screen">
+    <!-- Painel Principal com Menu Lateral -->
+    <div id="app-screen" class="hidden flex-1 flex flex-row min-h-screen">
 
-        <!-- Sidebar Esquerda -->
-        <aside class="w-72 shrink-0 bg-[#002B49] text-white flex flex-col shadow-xl">
-            <div class="p-6 border-b border-sky-900/50">
-                <div class="bg-white p-2 rounded-md inline-block mb-3">
-                    <img src="https://bemol.vteximg.com.br/arquivos/lp-conta-bemol-marca-bemol.png" alt="Bemol" class="h-6 object-contain">
-                </div>
-                <h1 class="text-lg font-bold tracking-wide">Bemol Marketplace</h1>
-                <p class="text-xs text-sky-300 mt-1">Fornecedor &rarr; CD Manaus</p>
-            </div>
+        <!-- Sidebar Esquerda -->
+        <aside class="w-72 shrink-0 bg-[#002B49] text-white flex flex-col shadow-xl">
+            <div class="p-6 border-b border-sky-900/50">
+                <div class="bg-white p-2 rounded-md inline-block mb-3">
+                    <img src="https://bemol.vteximg.com.br/arquivos/lp-conta-bemol-marca-bemol.png" alt="Bemol" class="h-6 object-contain">
+                </div>
+                <h1 class="text-lg font-bold tracking-wide">Bemol Marketplace</h1>
+                <p class="text-xs text-sky-300 mt-1">Fornecedor &rarr; CD Manaus</p>
+            </div>
 
-            <div class="px-4 py-6 flex-1 space-y-2">
-                <p class="px-3 text-[10px] font-bold text-sky-400 uppercase tracking-wider mb-2">Navegação</p>
+            <div class="px-4 py-6 flex-1 space-y-2">
+                <p class="px-3 text-[10px] font-bold text-sky-400 uppercase tracking-wider mb-2">Navegação</p>
 
-                <button onclick="mudarAba('consultas')" id="menu-consultas" class="w-full flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition">
-                    <span>🔍</span>
-                    <span>Consultas</span>
-                </button>
+                <button onclick="mudarAba('consultas')" id="menu-consultas" class="w-full flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition">
+                    <span>🔍</span>
+                    <span>Consultas</span>
+                </button>
 
-                <button onclick="mudarAba('indicadores')" id="menu-indicadores" class="w-full flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition">
-                    <span>📈</span>
-                    <span>Indicadores</span>
-                </button>
+                <button onclick="mudarAba('indicadores')" id="menu-indicadores" class="w-full flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition">
+                    <span>📈</span>
+                    <span>Indicadores</span>
+                </button>
 
-                <button onclick="mudarAba('relatorios')" id="menu-relatorios" class="w-full flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition">
-                    <span>📄</span>
-                    <span>Extrair Relatório</span>
-                </button>
+                <button onclick="mudarAba('relatorios')" id="menu-relatorios" class="w-full flex items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition">
+                    <span>📄</span>
+                    <span>Extrair Relatório</span>
+                </button>
 
-                <!-- Menu Exclusivo CD e Admin -->
-                <button onclick="mudarAba('cd-coleta')" id="menu-cd-coleta" class="w-full hidden items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition border border-emerald-600/40 mt-4">
-                    <span>📦</span>
-                    <span>Disponível para Coleta (LATAM)</span>
-                </button>
+                <!-- Menu Exclusivo CD e Admin -->
+                <button onclick="mudarAba('cd-coleta')" id="menu-cd-coleta" class="w-full hidden items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition border border-emerald-600/40 mt-4">
+                    <span>📦</span>
+                    <span>Disponível para Coleta (LATAM)</span>
+                </button>
 
-                <!-- Menu Exclusivo Admin -->
-                <button onclick="mudarAba('admin-painel')" id="menu-admin-painel" class="w-full hidden items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition border border-amber-600/40 mt-2">
-                    <span>⚙️</span>
-                    <span>Painel Admin (Sinalização)</span>
-                </button>
-            </div>
-        </aside>
+                <!-- Menu Exclusivo Admin -->
+                <button onclick="mudarAba('admin-painel')" id="menu-admin-painel" class="w-full hidden items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition border border-amber-600/40 mt-2">
+                    <span>⚙️</span>
+                    <span>Painel Admin (Sinalização)</span>
+                </button>
+            </div>
+        </aside>
 
-        <!-- Conteúdo Principal -->
-        <div class="flex-1 flex flex-col min-w-0">
-            <header class="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center shadow-sm">
-                <div>
-                    <h2 class="text-xl font-bold text-slate-800" id="titulo-pagina">Consultas</h2>
-                    <p class="text-xs text-slate-500">Gestão operacional de cargas e entregas</p>
-                </div>
-                <div class="flex items-center space-x-4">
-                    <span id="user-profile-badge" class="text-xs font-bold uppercase bg-sky-100 text-sky-800 px-3 py-1.5 rounded-full"></span>
-                    <button onclick="terminarSessao()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-lg font-semibold transition">Sair</button>
-                </div>
-            </header>
+        <!-- Conteúdo Principal -->
+        <div class="flex-1 flex flex-col min-w-0">
+            <header class="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center shadow-sm">
+                <div>
+                    <h2 class="text-xl font-bold text-slate-800" id="titulo-pagina">Consultas</h2>
+                    <p class="text-xs text-slate-500">Gestão operacional de cargas e entregas</p>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <span id="user-profile-badge" class="text-xs font-bold uppercase bg-sky-100 text-sky-800 px-3 py-1.5 rounded-full"></span>
+                    <button onclick="terminarSessao()" class="text-xs bg-slate-100 hover:bg-slate-200 text-slate-700 px-3.5 py-2 rounded-lg font-semibold transition">Sair</button>
+                </div>
+            </header>
 
-            <main class="p-8 flex-1 space-y-6 overflow-y-auto">
+            <main class="p-8 flex-1 space-y-6 overflow-y-auto">
 
-                <!-- CONTEÚDO: CONSULTAS -->
-                <div id="conteudo-consultas" class="space-y-6">
+                <!-- CONTEÚDO: CONSULTAS -->
+                <div id="conteudo-consultas" class="space-y-6">
 
-                    <!-- Pedidos do marketplace (dados do Databricks) -->
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                        <div class="flex justify-between items-start mb-4">
-                            <div>
-                                <h3 class="text-base font-bold text-slate-800">Pedidos Marketplace</h3>
-                                <p class="text-xs text-slate-500">Do pedido à entrega ao cliente</p>
-                            </div>
-                            <span id="sync-status" class="text-xs text-slate-400"></span>
-                        </div>
+                    <!-- Pedidos do marketplace (dados do Databricks) -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <h3 class="text-base font-bold text-slate-800">Pedidos Marketplace</h3>
+                                <p class="text-xs text-slate-500">Do pedido à entrega ao cliente</p>
+                            </div>
+                            <span id="sync-status" class="text-xs text-slate-400"></span>
+                        </div>
 
-                        <form id="filtros-entregas" onsubmit="buscarEntregas(event)" class="grid grid-cols-1 md:grid-cols-6 gap-4 items-end mb-4">
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Seller</label>
-                                <select id="f_seller" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
-                                    <option value="">Todos</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Status</label>
-                                <select id="f_status" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
-                                    <option value="">Todos</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Pedido de</label>
-                                <input type="date" id="f_de" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Até</label>
-                                <input type="date" id="f_ate" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">NF, pedido ou ordem</label>
-                                <input type="text" id="f_busca" inputmode="numeric" placeholder="Número" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
-                            </div>
-                            <div>
-                                <button type="submit" class="w-full bg-[#003366] hover:bg-sky-800 text-white font-semibold px-4 py-2 rounded-lg text-sm transition shadow-sm">Pesquisar</button>
-                            </div>
-                        </form>
+                        <form id="filtros-entregas" onsubmit="buscarEntregas(event)" class="grid grid-cols-1 md:grid-cols-6 gap-4 items-end mb-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Seller</label>
+                                <select id="f_seller" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                                    <option value="">Todos</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Status</label>
+                                <select id="f_status" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                                    <option value="">Todos</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Pedido de</label>
+                                <input type="date" id="f_de" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Até</label>
+                                <input type="date" id="f_ate" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">NF, pedido ou ordem</label>
+                                <input type="text" id="f_busca" inputmode="numeric" placeholder="Número" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                            </div>
+                            <div>
+                                <button type="submit" class="w-full bg-[#003366] hover:bg-sky-800 text-white font-semibold px-4 py-2 rounded-lg text-sm transition shadow-sm">Pesquisar</button>
+                            </div>
+                        </form>
 
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left text-sm text-slate-600">
-                                <thead class="bg-slate-50 text-slate-700 uppercase text-xs">
-                                    <tr>
-                                        <th class="p-3">PEDIDO_COMPRA</th>
-                                        <th class="p-3">N_FORNECEDOR</th>
-                                        <th class="p-3">DT_PEDIDO</th>
-                                        <th class="p-3">NOTA SELLER</th>
-                                        <th class="p-3">DT_NF_SELLER</th>
-                                        <th class="p-3">data_coleta</th>
-                                        <th class="p-3">emissao_cte</th>
-                                        <th class="p-3">data_embarque</th>
-                                        <th class="p-3">ENTREGA CD</th>
-                                        <th class="p-3">DT_FATURAMENTO_CD</th>
-                                        <th class="p-3">NOTA BEMOL</th>
-                                        <th class="p-3">DT_ENTREGA_CLIENTE</th>
-                                        <th class="p-3">Destino</th>
-                                        <th class="p-3">Status</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tabela-entregas" class="divide-y divide-slate-200">
-                                    <tr><td colspan="14" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm text-slate-600">
+                                <thead class="bg-slate-50 text-slate-700 uppercase text-xs">
+                                    <tr>
+                                        <th class="p-3">PEDIDO_COMPRA</th>
+                                        <th class="p-3">N_FORNECEDOR</th>
+                                        <th class="p-3">DT_PEDIDO</th>
+                                        <th class="p-3">NOTA SELLER</th>
+                                        <th class="p-3">DT_NF_SELLER</th>
+                                        <th class="p-3">data_coleta</th>
+                                        <th class="p-3">emissao_cte</th>
+                                        <th class="p-3">data_embarque</th>
+                                        <th class="p-3">ENTREGA CD</th>
+                                        <th class="p-3">DT_FATURAMENTO_CD</th>
+                                        <th class="p-3">NOTA BEMOL</th>
+                                        <th class="p-3">DT_ENTREGA_CLIENTE</th>
+                                        <th class="p-3">Destino</th>
+                                        <th class="p-3">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabela-entregas" class="divide-y divide-slate-200">
+                                    <tr><td colspan="14" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
 
-                        <div class="flex justify-between items-center mt-4 text-xs text-slate-500">
-                            <span id="entregas-total"></span>
-                            <div class="space-x-2">
-                                <button id="pag-anterior" onclick="mudarPagina(-1)" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40">Anterior</button>
-                                <button id="pag-proxima" onclick="mudarPagina(1)" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40">Próxima</button>
-                            </div>
-                        </div>
-                    </div>
+                        <div class="flex justify-between items-center mt-4 text-xs text-slate-500">
+                            <span id="entregas-total"></span>
+                            <div class="space-x-2">
+                                <button id="pag-anterior" onclick="mudarPagina(-1)" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40">Anterior</button>
+                                <button id="pag-proxima" onclick="mudarPagina(1)" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40">Próxima</button>
+                            </div>
+                        </div>
+                    </div>
 
-                    <!-- Consulta de coletas -->
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                        <h3 class="text-base font-bold text-slate-800 mb-4">Consultar Coletas</h3>
-                        <form id="consulta-form" onsubmit="consultarOperacao(event)" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Seller</label>
-                                <select id="filtro_seller" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
-                                    <option value="">Selecione o Seller</option>
-                                    <option value="Brascol - ONESHOP">Brascol - ONESHOP</option>
-                                    <option value="Tramontina">Tramontina</option>
-                                    <option value="Vitrola">Vitrola</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Transportadora</label>
-                                <select id="filtro_transportadora" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
-                                    <option value="">Selecione a Transportadora</option>
-                                    <option value="LATAM">LATAM</option>
-                                    <option value="Essencial Cargo">Essencial Cargo</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Nota Fiscal (NF)</label>
-                                <input type="text" id="filtro_nf" required placeholder="Número da NF" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
-                            </div>
-                            <div>
-                                <button type="submit" class="w-full bg-[#003366] hover:bg-sky-800 text-white font-semibold px-4 py-2 rounded-lg text-sm transition shadow-sm">Pesquisar</button>
-                            </div>
-                        </form>
+                    <!-- Consulta de coletas -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <h3 class="text-base font-bold text-slate-800 mb-4">Consultar Coletas</h3>
+                        <form id="consulta-form" onsubmit="consultarOperacao(event)" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Seller</label>
+                                <select id="filtro_seller" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                                    <option value="">Selecione o Seller</option>
+                                    <option value="Brascol - ONESHOP">Brascol - ONESHOP</option>
+                                    <option value="Tramontina">Tramontina</option>
+                                    <option value="Vitrola">Vitrola</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Transportadora</label>
+                                <select id="filtro_transportadora" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                                    <option value="">Selecione a Transportadora</option>
+                                    <option value="LATAM">LATAM</option>
+                                    <option value="Essencial Cargo">Essencial Cargo</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Nota Fiscal (NF)</label>
+                                <input type="text" id="filtro_nf" required placeholder="Número da NF" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                            </div>
+                            <div>
+                                <button type="submit" class="w-full bg-[#003366] hover:bg-sky-800 text-white font-semibold px-4 py-2 rounded-lg text-sm transition shadow-sm">Pesquisar</button>
+                            </div>
+                        </form>
 
-                        <div id="resultado-pesquisa" class="hidden mt-6 p-4 bg-sky-50 border border-sky-200 rounded-xl">
-                            <h4 class="text-sm font-bold text-sky-900 mb-2">Resultado para a NF: <span id="res-nf" class="text-orange-600"></span></h4>
-                            <div id="res-encontrado" class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                                <div><span class="text-xs text-slate-500 block">Etapa Atual:</span> <span id="res-etapa" class="font-bold text-emerald-700"></span></div>
-                                <div><span class="text-xs text-slate-500 block">Previsão:</span> <span id="res-previsao" class="font-semibold text-slate-800"></span></div>
-                                <div><span class="text-xs text-slate-500 block">Status Latam:</span> <span id="res-latam" class="font-semibold text-sky-700"></span></div>
-                            </div>
-                            <p id="res-nao-encontrado" class="hidden text-sm text-slate-600">Nenhuma coleta encontrada com esses dados.</p>
-                        </div>
-                    </div>
+                        <div id="resultado-pesquisa" class="hidden mt-6 p-4 bg-sky-50 border border-sky-200 rounded-xl">
+                            <h4 class="text-sm font-bold text-sky-900 mb-2">Resultado para a NF: <span id="res-nf" class="text-orange-600"></span></h4>
+                            <div id="res-encontrado" class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                <div><span class="text-xs text-slate-500 block">Etapa Atual:</span> <span id="res-etapa" class="font-bold text-emerald-700"></span></div>
+                                <div><span class="text-xs text-slate-500 block">Previsão:</span> <span id="res-previsao" class="font-semibold text-slate-800"></span></div>
+                                <div><span class="text-xs text-slate-500 block">Status Latam:</span> <span id="res-latam" class="font-semibold text-sky-700"></span></div>
+                            </div>
+                            <p id="res-nao-encontrado" class="hidden text-sm text-slate-600">Nenhuma coleta encontrada com esses dados.</p>
+                        </div>
+                    </div>
 
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                        <h3 class="text-base font-bold text-slate-800 mb-1">Agendamentos</h3>
-                        <p class="text-xs text-slate-500 mb-4">Últimos 100 agendamentos registados</p>
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left text-sm text-slate-600">
-                                <thead class="bg-slate-50 text-slate-700 uppercase text-xs">
-                                    <tr>
-                                        <th class="p-3">Seller</th>
-                                        <th class="p-3">Transportadora</th>
-                                        <th class="p-3">NF</th>
-                                        <th class="p-3">Motorista</th>
-                                        <th class="p-3">Placa</th>
-                                        <th class="p-3">Agendado para</th>
-                                        <th class="p-3">Etapa Atual</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tabela-agendamentos" class="divide-y divide-slate-200">
-                                    <tr><td colspan="7" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <h3 class="text-base font-bold text-slate-800 mb-1">Agendamentos</h3>
+                        <p class="text-xs text-slate-500 mb-4">Últimos 100 agendamentos registados</p>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm text-slate-600">
+                                <thead class="bg-slate-50 text-slate-700 uppercase text-xs">
+                                    <tr>
+                                        <th class="p-3">Seller</th>
+                                        <th class="p-3">Transportadora</th>
+                                        <th class="p-3">NF</th>
+                                        <th class="p-3">Motorista</th>
+                                        <th class="p-3">Placa</th>
+                                        <th class="p-3">Agendado para</th>
+                                        <th class="p-3">Etapa Atual</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabela-agendamentos" class="divide-y divide-slate-200">
+                                    <tr><td colspan="7" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
 
-                <!-- CONTEÚDO: CD — DISPONÍVEL PARA COLETA (LATAM) -->
-                <div id="conteudo-cd-coleta" class="space-y-6 hidden">
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                        <div class="flex justify-between items-center mb-4">
-                            <div>
-                                <h3 class="text-base font-bold text-slate-800">Cargas Disponíveis para Coleta — LATAM</h3>
-                                <p class="text-xs text-slate-500">Cargas sinalizadas pelo Administrador como liberadas para recolha no CD01</p>
-                            </div>
-                            <span class="bg-emerald-100 text-emerald-800 text-xs px-3 py-1 rounded-full font-bold">CD01 / Operacional</span>
-                        </div>
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left text-sm text-slate-600">
-                                <thead class="bg-slate-50 text-slate-700 uppercase text-xs">
-                                    <tr>
-                                        <th class="p-3">Seller</th>
-                                        <th class="p-3">NF</th>
-                                        <th class="p-3">Motorista</th>
-                                        <th class="p-3">Placa</th>
-                                        <th class="p-3">Agendado para</th>
-                                        <th class="p-3">Estado no CD</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tabela-cd-latam" class="divide-y divide-slate-200">
-                                    <tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhuma carga liberada no momento.</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
+                <!-- CONTEÚDO: CD — DISPONÍVEL PARA COLETA (LATAM) -->
+                <div id="conteudo-cd-coleta" class="space-y-6 hidden">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <div class="flex justify-between items-center mb-4">
+                            <div>
+                                <h3 class="text-base font-bold text-slate-800">Cargas Disponíveis para Coleta — LATAM</h3>
+                                <p class="text-xs text-slate-500">Cargas sinalizadas pelo Administrador como liberadas para recolha no CD01</p>
+                            </div>
+                            <span class="bg-emerald-100 text-emerald-800 text-xs px-3 py-1 rounded-full font-bold">CD01 / Operacional</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm text-slate-600">
+                                <thead class="bg-slate-50 text-slate-700 uppercase text-xs">
+                                    <tr>
+                                        <th class="p-3">Seller</th>
+                                        <th class="p-3">NF</th>
+                                        <th class="p-3">Motorista</th>
+                                        <th class="p-3">Placa</th>
+                                        <th class="p-3">Agendado para</th>
+                                        <th class="p-3">Estado no CD</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabela-cd-latam" class="divide-y divide-slate-200">
+                                    <tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhuma carga liberada no momento.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
 
-                <!-- CONTEÚDO: PAINEL ADMIN -->
-                <div id="conteudo-admin-painel" class="space-y-6 hidden">
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                        <h3 class="text-base font-bold text-slate-800 mb-1">Painel Administrativo — Sinalização LATAM</h3>
-                        <p class="text-xs text-slate-500 mb-4">Área restrita ao Administrador: Selecione e libere as cargas da LATAM para visualização no CD.</p>
+                <!-- CONTEÚDO: PAINEL ADMIN -->
+                <div id="conteudo-admin-painel" class="space-y-6 hidden">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <h3 class="text-base font-bold text-slate-800 mb-1">Painel Administrativo — Sinalização LATAM</h3>
+                        <p class="text-xs text-slate-500 mb-4">Área restrita ao Administrador: Selecione e libere as cargas da LATAM para visualização no CD.</p>
 
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left text-sm text-slate-600">
-                                <thead class="bg-slate-50 text-slate-700 uppercase text-xs">
-                                    <tr>
-                                        <th class="p-3">Seller</th>
-                                        <th class="p-3">Transportadora</th>
-                                        <th class="p-3">NF</th>
-                                        <th class="p-3">Agendado para</th>
-                                        <th class="p-3">Status Atual</th>
-                                        <th class="p-3 text-center">Ação / Sinalização</th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tabela-admin-sinalizacao" class="divide-y divide-slate-200">
-                                    <tr><td colspan="6" class="p-4 text-center text-slate-400">A carregar painel admin...</td></tr>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm text-slate-600">
+                                <thead class="bg-slate-50 text-slate-700 uppercase text-xs">
+                                    <tr>
+                                        <th class="p-3">Seller</th>
+                                        <th class="p-3">Transportadora</th>
+                                        <th class="p-3">NF</th>
+                                        <th class="p-3">Agendado para</th>
+                                        <th class="p-3">Status Atual</th>
+                                        <th class="p-3 text-center">Ação / Sinalização</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabela-admin-sinalizacao" class="divide-y divide-slate-200">
+                                    <tr><td colspan="6" class="p-4 text-center text-slate-400">A carregar painel admin...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
 
-                <!-- CONTEÚDO GENÉRICO PARA INDICADORES E RELATÓRIOS -->
-                <div id="conteudo-generico" class="space-y-6 hidden">
-                    <div class="bg-white p-12 rounded-2xl shadow-sm border border-slate-200 text-center">
-                        <h3 class="text-lg font-bold text-slate-700 mb-2" id="titulo-generico">Módulo em Funcionamento</h3>
-                        <p class="text-sm text-slate-500">Esta secção integra o portal logístico Bemol Marketplace.</p>
-                    </div>
-                </div>
+                <!-- CONTEÚDO GENÉRICO PARA INDICADORES E RELATÓRIOS -->
+                <div id="conteudo-generico" class="space-y-6 hidden">
+                    <div class="bg-white p-12 rounded-2xl shadow-sm border border-slate-200 text-center">
+                        <h3 class="text-lg font-bold text-slate-700 mb-2" id="titulo-generico">Módulo em Funcionamento</h3>
+                        <p class="text-sm text-slate-500">Esta secção integra o portal logístico Bemol Marketplace.</p>
+                    </div>
+                </div>
 
-            </main>
-        </div>
-    </div>
+            </main>
+        </div>
+    </div>
 
-    <script>
-        let currentUser = null;
-        let agendamentos = [];
-        let paginaEntregas = 1;
-        let totalEntregas = 0;
-        const POR_PAGINA = 50;
+    <script>
+        let currentUser = null;
+        let agendamentos = [];
+        let paginaEntregas = 1;
+        let totalEntregas = 0;
+        const POR_PAGINA = 50;
 
-        // Classes de cada item do menu: [ativo, inativo]
-        const MENUS = {
-            'consultas':    { titulo: 'Consultas', ativo: 'bg-sky-600 text-white shadow-md', inativo: 'text-sky-200 hover:bg-sky-900/40' },
-            'indicadores':  { titulo: 'Indicadores', ativo: 'bg-sky-600 text-white shadow-md', inativo: 'text-sky-200 hover:bg-sky-900/40' },
-            'relatorios':   { titulo: 'Extrair Relatório', ativo: 'bg-sky-600 text-white shadow-md', inativo: 'text-sky-200 hover:bg-sky-900/40' },
-            'cd-coleta':    { titulo: 'Disponível para Coleta — LATAM', ativo: 'bg-emerald-600 text-white shadow-md', inativo: 'text-emerald-300 hover:bg-emerald-900/40' },
-            'admin-painel': { titulo: 'Painel Administrativo — Sinalização', ativo: 'bg-amber-600 text-white shadow-md', inativo: 'text-amber-300 hover:bg-amber-900/40' },
-        };
+        // Classes de cada item do menu: [ativo, inativo]
+        const MENUS = {
+            'consultas':    { titulo: 'Consultas', ativo: 'bg-sky-600 text-white shadow-md', inativo: 'text-sky-200 hover:bg-sky-900/40' },
+            'indicadores':  { titulo: 'Indicadores', ativo: 'bg-sky-600 text-white shadow-md', inativo: 'text-sky-200 hover:bg-sky-900/40' },
+            'relatorios':   { titulo: 'Extrair Relatório', ativo: 'bg-sky-600 text-white shadow-md', inativo: 'text-sky-200 hover:bg-sky-900/40' },
+            'cd-coleta':    { titulo: 'Disponível para Coleta — LATAM', ativo: 'bg-emerald-600 text-white shadow-md', inativo: 'text-emerald-300 hover:bg-emerald-900/40' },
+            'admin-painel': { titulo: 'Painel Administrativo — Sinalização', ativo: 'bg-amber-600 text-white shadow-md', inativo: 'text-amber-300 hover:bg-amber-900/40' },
+        };
 
-        // Escapa texto vindo do banco antes de pôr no HTML
-        function esc(v) {
-            return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-        }
+        // Escapa texto vindo do banco antes de pôr no HTML
+        function esc(v) {
+            return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
 
-        // "2026-09-24" -> "24/09/2026" sem passar por Date (evita mostrar o dia anterior em UTC-4)
-        function formatarData(v) {
-            const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v || '');
-            return m ? `${m[3]}/${m[2]}/${m[1]}` : '—';
-        }
+        // "2026-09-24" -> "24/09/2026" sem passar por Date (evita mostrar o dia anterior em UTC-4)
+        function formatarData(v) {
+            const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v || '');
+            return m ? `${m[3]}/${m[2]}/${m[1]}` : '—';
+        }
 
-        async function api(caminho, opcoes = {}) {
-            const res = await fetch(caminho, {
-                ...opcoes,
-                headers: opcoes.body ? { 'Content-Type': 'application/json' } : {},
-            });
-            if (res.status === 401 && caminho !== '/api/login') {
-                mostrarLogin();
-                throw new Error('Sessão expirada');
-            }
-            const dados = await res.json().catch(() => ({}));
-            if (!res.ok) throw new Error(dados.error || `Erro ${res.status}`);
-            return dados;
-        }
+        async function api(caminho, opcoes = {}) {
+            const res = await fetch(caminho, {
+                ...opcoes,
+                headers: opcoes.body ? { 'Content-Type': 'application/json' } : {},
+            });
+            if (res.status === 401 && caminho !== '/api/login') {
+                mostrarLogin();
+                throw new Error('Sessão expirada');
+            }
+            const dados = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(dados.error || `Erro ${res.status}`);
+            return dados;
+        }
 
-        function mostrarLogin() {
-            currentUser = null;
-            document.getElementById('app-screen').classList.add('hidden');
-            document.getElementById('login-screen').classList.remove('hidden');
-        }
+        function mostrarLogin() {
+            currentUser = null;
+            document.getElementById('app-screen').classList.add('hidden');
+            document.getElementById('login-screen').classList.remove('hidden');
+        }
 
-        function mostrarApp() {
-            aplicarPermissoesPerfil();
-            document.getElementById('login-screen').classList.add('hidden');
-            document.getElementById('app-screen').classList.remove('hidden');
-            mudarAba('consultas');
-            carregarDados();
-        }
+        function mostrarApp() {
+            aplicarPermissoesPerfil();
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('app-screen').classList.remove('hidden');
+            mudarAba('consultas');
+            carregarDados();
+        }
 
-        async function fazerLogin(e) {
-            e.preventDefault();
-            const erroEl = document.getElementById('login-error');
-            erroEl.classList.add('hidden');
-            try {
-                currentUser = await api('/api/login', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        username: document.getElementById('username').value,
-                        senha: document.getElementById('senha').value,
-                    }),
-                });
-                document.getElementById('senha').value = '';
-                mostrarApp();
-            } catch (err) {
-                erroEl.textContent = err.message;
-                erroEl.classList.remove('hidden');
-            }
-        }
+        async function fazerLogin(e) {
+            e.preventDefault();
+            const erroEl = document.getElementById('login-error');
+            erroEl.classList.add('hidden');
+            try {
+                currentUser = await api('/api/login', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        username: document.getElementById('username').value,
+                        senha: document.getElementById('senha').value,
+                    }),
+                });
+                document.getElementById('senha').value = '';
+                mostrarApp();
+            } catch (err) {
+                erroEl.textContent = err.message;
+                erroEl.classList.remove('hidden');
+            }
+        }
 
-        async function terminarSessao() {
-            await fetch('/api/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-            location.reload();
-        }
+        async function terminarSessao() {
+            await fetch('/api/logout', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+            location.reload();
+        }
 
-        function aplicarPermissoesPerfil() {
-            document.getElementById('user-profile-badge').textContent = `${currentUser.username} (${currentUser.perfil})`;
-            // A tela só esconde menus; quem garante a permissão é a API
-            const visivel = {
-                'cd-coleta': ['cd', 'admin'].includes(currentUser.perfil),
-                'admin-painel': currentUser.perfil === 'admin',
-            };
-            for (const [aba, mostrar] of Object.entries(visivel)) {
-                const el = document.getElementById('menu-' + aba);
-                el.classList.toggle('hidden', !mostrar);
-                el.classList.toggle('flex', mostrar);
-            }
-        }
+        function aplicarPermissoesPerfil() {
+            document.getElementById('user-profile-badge').textContent = `${currentUser.username} (${currentUser.perfil})`;
+            // A tela só esconde menus; quem garante a permissão é a API
+            const visivel = {
+                'cd-coleta': ['cd', 'admin'].includes(currentUser.perfil),
+                'admin-painel': currentUser.perfil === 'admin',
+            };
+            for (const [aba, mostrar] of Object.entries(visivel)) {
+                const el = document.getElementById('menu-' + aba);
+                el.classList.toggle('hidden', !mostrar);
+                el.classList.toggle('flex', mostrar);
+            }
+        }
 
-        function mudarAba(aba) {
-            for (const [id, cfg] of Object.entries(MENUS)) {
-                const el = document.getElementById('menu-' + id);
-                const ativo = id === aba;
-                el.classList.remove(...cfg.ativo.split(' '), ...cfg.inativo.split(' '));
-                el.classList.add(...(ativo ? cfg.ativo : cfg.inativo).split(' '));
-            }
-            const especificas = ['consultas', 'cd-coleta', 'admin-painel'];
-            for (const id of especificas) {
-                document.getElementById('conteudo-' + id).classList.toggle('hidden', id !== aba);
-            }
-            document.getElementById('conteudo-generico').classList.toggle('hidden', especificas.includes(aba));
-            document.getElementById('titulo-pagina').textContent = MENUS[aba].titulo;
-            document.getElementById('titulo-generico').textContent = MENUS[aba].titulo;
-        }
+        function mudarAba(aba) {
+            for (const [id, cfg] of Object.entries(MENUS)) {
+                const el = document.getElementById('menu-' + id);
+                const ativo = id === aba;
+                el.classList.remove(...cfg.ativo.split(' '), ...cfg.inativo.split(' '));
+                el.classList.add(...(ativo ? cfg.ativo : cfg.inativo).split(' '));
+            }
+            const especificas = ['consultas', 'cd-coleta', 'admin-painel'];
+            for (const id of especificas) {
+                document.getElementById('conteudo-' + id).classList.toggle('hidden', id !== aba);
+            }
+            document.getElementById('conteudo-generico').classList.toggle('hidden', especificas.includes(aba));
+            document.getElementById('titulo-pagina').textContent = MENUS[aba].titulo;
+            document.getElementById('titulo-generico').textContent = MENUS[aba].titulo;
+        }
 
-        async function carregarDados() {
-            carregarFiltrosEntregas();
-            carregarStatusSync();
-            buscarEntregas();
-            carregarAgendamentos();
-        }
+        async function carregarDados() {
+            carregarFiltrosEntregas();
+            carregarStatusSync();
+            buscarEntregas();
+            carregarAgendamentos();
+        }
 
-        // ---------- Pedidos marketplace ----------
+        // ---------- Pedidos marketplace ----------
 
-        async function carregarFiltrosEntregas() {
-            try {
-                const { sellers, status } = await api('/api/entregas/filtros');
-                document.getElementById('f_seller').innerHTML = '<option value="">Todos</option>' +
-                    sellers.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
-                document.getElementById('f_status').innerHTML = '<option value="">Todos</option>' +
-                    status.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
-            } catch (err) { console.error(err); }
-        }
+        async function carregarFiltrosEntregas() {
+            try {
+                const { sellers, status } = await api('/api/entregas/filtros');
+                document.getElementById('f_seller').innerHTML = '<option value="">Todos</option>' +
+                    sellers.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+                document.getElementById('f_status').innerHTML = '<option value="">Todos</option>' +
+                    status.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+            } catch (err) { console.error(err); }
+        }
 
-        async function carregarStatusSync() {
-            try {
-                const linhas = await api('/api/sync-status');
-                const ultima = linhas.map(l => l.executado_em).sort().pop();
-                document.getElementById('sync-status').textContent = ultima
-                    ? `Atualizado em ${new Date(ultima).toLocaleString('pt-BR', { timeZone: 'America/Manaus' })}`
-                    : 'Aguardando primeira sincronização';
-            } catch (err) { console.error(err); }
-        }
+        async function carregarStatusSync() {
+            try {
+                const linhas = await api('/api/sync-status');
+                const ultima = linhas.map(l => l.executado_em).sort().pop();
+                document.getElementById('sync-status').textContent = ultima
+                    ? `Atualizado em ${new Date(ultima).toLocaleString('pt-BR', { timeZone: 'America/Manaus' })}`
+                    : 'Aguardando primeira sincronização';
+            } catch (err) { console.error(err); }
+        }
 
-        function buscarEntregas(e) {
-            if (e) { e.preventDefault(); paginaEntregas = 1; }
-            carregarEntregas();
-        }
+        function buscarEntregas(e) {
+            if (e) { e.preventDefault(); paginaEntregas = 1; }
+            carregarEntregas();
+        }
 
-        function mudarPagina(delta) {
-            paginaEntregas += delta;
-            carregarEntregas();
-        }
+        function mudarPagina(delta) {
+            paginaEntregas += delta;
+            carregarEntregas();
+        }
 
-        function corStatus(s) {
-            const t = (s || '').toUpperCase();
-            if (t.includes('FORA')) return 'bg-red-100 text-red-800';
-            if (t.includes('SEM')) return 'bg-amber-100 text-amber-800';
-            return 'bg-emerald-100 text-emerald-800';
-        }
+        function corStatus(s) {
+            const t = (s || '').toUpperCase();
+            if (t.includes('FORA')) return 'bg-red-100 text-red-800';
+            if (t.includes('SEM')) return 'bg-amber-100 text-amber-800';
+            return 'bg-emerald-100 text-emerald-800';
+        }
 
-        async function carregarEntregas() {
-            const tbody = document.getElementById('tabela-entregas');
-            const params = new URLSearchParams({ pagina: paginaEntregas });
-            const campos = { seller: 'f_seller', status: 'f_status', de: 'f_de', ate: 'f_ate', busca: 'f_busca' };
-            for (const [param, id] of Object.entries(campos)) {
-                const v = document.getElementById(id).value.trim();
-                if (v) params.set(param, v);
-            }
+        async function carregarEntregas() {
+            const tbody = document.getElementById('tabela-entregas');
+            const params = new URLSearchParams({ pagina: paginaEntregas });
+            const campos = { seller: 'f_seller', status: 'f_status', de: 'f_de', ate: 'f_ate', busca: 'f_busca' };
+            for (const [param, id] of Object.entries(campos)) {
+                const v = document.getElementById(id).value.trim();
+                if (v) params.set(param, v);
+            }
 
-            try {
-                const { itens, total } = await api('/api/entregas?' + params);
-                totalEntregas = total;
-                tbody.innerHTML = itens.length === 0
-                    ? '<tr><td colspan="14" class="p-4 text-center text-slate-400">Nenhum pedido encontrado.</td></tr>'
-                    : itens.map(i => `
-                        <tr class="hover:bg-slate-50">
-                            <td class="p-3 font-medium text-slate-900">${esc(i.pedido)}</td>
-                            <td class="p-3">${esc(i.n_fornecedor)}</td>
-                            <td class="p-3">${formatarData(i.dt_pedido)}</td>
-                            <td class="p-3">${esc(i.nota_fiscal_explode || '—')}</td>
-                            <td class="p-3">${formatarData(i.emissao)}</td>
-                            <td class="p-3">${formatarData(i.data_coleta)}</td>
-                            <td class="p-3">${formatarData(i.emissao_cte)}</td>
-                            <td class="p-3">${formatarData(i.data_embarque)}</td>
-                            <td class="p-3">${formatarData(i.data_entrega)}</td>
-                            <td class="p-3">${formatarData(i.DT_FATURAMENTO)}</td>
-                            <td class="p-3 font-semibold text-[#003366]">${esc(i.nf || '—')}</td>
-                            <td class="p-3">${formatarData(i.DT_ENTREGA)}</td>
-                            <td class="p-3">${esc([i.bairro, i.cidade].filter(Boolean).join(', '))}${i.uf ? ' - ' + esc(i.uf) : ''}</td>
-                            <td class="p-3"><span class="${corStatus(i.no_prazo)} text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap">${esc(i.no_prazo || '—')}</span></td>
-                        </tr>`).join('');
-            } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="14" class="p-4 text-center text-red-500">${esc(err.message)}</td></tr>`;
-                totalEntregas = 0;
-            }
+            try {
+                const { itens, total } = await api('/api/entregas?' + params);
+                totalEntregas = total;
+                tbody.innerHTML = itens.length === 0
+                    ? '<tr><td colspan="14" class="p-4 text-center text-slate-400">Nenhum pedido encontrado.</td></tr>'
+                    : itens.map(i => `
+                        <tr class="hover:bg-slate-50">
+                            <td class="p-3 font-medium text-slate-900">${esc(i.pedido)}</td>
+                            <td class="p-3">${esc(i.n_fornecedor)}</td>
+                            <td class="p-3">${formatarData(i.dt_pedido)}</td>
+                            <td class="p-3">${esc(i.nota_fiscal_explode || '—')}</td>
+                            <td class="p-3">${formatarData(i.emissao)}</td>
+                            <td class="p-3">${formatarData(i.data_coleta)}</td>
+                            <td class="p-3">${formatarData(i.emissao_cte)}</td>
+                            <td class="p-3">${formatarData(i.data_embarque)}</td>
+                            <td class="p-3">${formatarData(i.data_entrega)}</td>
+                            <td class="p-3">${formatarData(i.DT_FATURAMENTO)}</td>
+                            <td class="p-3 font-semibold text-[#003366]">${esc(i.nf || '—')}</td>
+                            <td class="p-3">${formatarData(i.DT_ENTREGA)}</td>
+                            <td class="p-3">${esc([i.bairro, i.cidade].filter(Boolean).join(', '))}${i.uf ? ' - ' + esc(i.uf) : ''}</td>
+                            <td class="p-3"><span class="${corStatus(i.no_prazo)} text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap">${esc(i.no_prazo || '—')}</span></td>
+                        </tr>`).join('');
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="14" class="p-4 text-center text-red-500">${esc(err.message)}</td></tr>`;
+                totalEntregas = 0;
+            }
 
-            const paginas = Math.max(1, Math.ceil(totalEntregas / POR_PAGINA));
-            document.getElementById('entregas-total').textContent =
-                `${totalEntregas.toLocaleString('pt-BR')} pedidos · página ${paginaEntregas} de ${paginas}`;
-            document.getElementById('pag-anterior').disabled = paginaEntregas <= 1;
-            document.getElementById('pag-proxima').disabled = paginaEntregas >= paginas;
-        }
+            const paginas = Math.max(1, Math.ceil(totalEntregas / POR_PAGINA));
+            document.getElementById('entregas-total').textContent =
+                `${totalEntregas.toLocaleString('pt-BR')} pedidos · página ${paginaEntregas} de ${paginas}`;
+            document.getElementById('pag-anterior').disabled = paginaEntregas <= 1;
+            document.getElementById('pag-proxima').disabled = paginaEntregas >= paginas;
+        }
 
-        // ---------- Agendamentos ----------
+        // ---------- Agendamentos ----------
 
-        async function carregarAgendamentos() {
-            try {
-                agendamentos = await api('/api/agendamentos');
-            } catch (err) {
-                console.error(err);
-                agendamentos = [];
-            }
+        async function carregarAgendamentos() {
+            try {
+                agendamentos = await api('/api/agendamentos');
+            } catch (err) {
+                console.error(err);
+                agendamentos = [];
+            }
 
-            document.getElementById('tabela-agendamentos').innerHTML = agendamentos.length === 0
-                ? '<tr><td colspan="7" class="p-4 text-center text-slate-400">Nenhum registo encontrado.</td></tr>'
-                : agendamentos.map(item => `
-                    <tr class="hover:bg-slate-50">
-                        <td class="p-3 font-medium text-slate-900">${esc(item.seller)}</td>
-                        <td class="p-3">${esc(item.transportadora)}</td>
-                        <td class="p-3 font-semibold text-[#003366]">${esc(item.nota_fiscal)}</td>
-                        <td class="p-3">${esc(item.motorista)}</td>
-                        <td class="p-3">${esc(item.veiculo_placa)}</td>
-                        
+            document.getElementById('tabela-agendamentos').innerHTML = agendamentos.length === 0
+                ? '<tr><td colspan="7" class="p-4 text-center text-slate-400">Nenhum registo encontrado.</td></tr>'
+                : agendamentos.map(item => `
+                    <tr class="hover:bg-slate-50">
+                        <td class="p-3 font-medium text-slate-900">${esc(item.seller)}</td>
+                        <td class="p-3">${esc(item.transportadora)}</td>
+                        <td class="p-3 font-semibold text-[#003366]">${esc(item.nota_fiscal)}</td>
+                        <td class="p-3">${esc(item.motorista)}</td>
+                        <td class="p-3">${esc(item.veiculo_placa)}</td>
+                        <td class="p-3 font-medium text-slate-700">${formatarData(item.data_agendamento)}</td>
+                        <td class="p-3"><span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-medium">${esc(item.status_etapa)}</span></td>
+                    </tr>`).join('');
+
+            const latamLiberados = agendamentos.filter(i => i.transportadora === 'LATAM' && i.liberado_latam);
+            document.getElementById('tabela-cd-latam').innerHTML = latamLiberados.length === 0
+                ? '<tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhuma carga liberada no momento.</td></tr>'
+                : latamLiberados.map(item => `
+                    <tr class="hover:bg-slate-50">
+                        <td class="p-3 font-medium text-slate-900">${esc(item.seller)}</td>
+                        <td class="p-3 font-semibold text-[#003366]">${esc(item.nota_fiscal)}</td>
+                        <td class="p-3">${esc(item.motorista)}</td>
+                        <td class="p-3">${esc(item.veiculo_placa)}</td>
+                        <td class="p-3">${formatarData(item.data_agendamento)}</td>
+                        <td class="p-3"><span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-bold">LIBERADA LATAM</span></td>
+                    </tr>`).join('');
+
+            document.getElementById('tabela-admin-sinalizacao').innerHTML = agendamentos.length === 0
+                ? '<tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhum agendamento para gerir.</td></tr>'
+                : agendamentos.map(item => `
+                    <tr class="hover:bg-slate-50">
+                        <td class="p-3 font-medium text-slate-900">${esc(item.seller)}</td>
+                        <td class="p-3">${esc(item.transportadora)}</td>
+                        <td class="p-3 font-semibold text-[#003366]">${esc(item.nota_fiscal)}</td>
+                        <td class="p-3">${formatarData(item.data_agendamento)}</td>
+                        <td class="p-3"><span class="${item.liberado_latam ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'} text-xs px-2.5 py-1 rounded-full font-medium">${item.liberado_latam ? 'Liberada para Coleta' : 'Bloqueada'}</span></td>
+                        <td class="p-3 text-center">
+                            <button onclick="alternarLatam(${item.id}, ${!item.liberado_latam})" class="px-3 py-1.5 rounded-lg text-xs font-semibold ${item.liberado_latam ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-emerald-600 text-white hover:bg-emerald-700'} transition">
+                                ${item.liberado_latam ? 'Revogar Coleta' : 'Liberar Coleta'}
+                            </button>
+                        </td>
+                    </tr>`).join('');
+        }
+
+        async function consultarOperacao(e) {
+            e.preventDefault();
+            const seller = document.getElementById('filtro_seller').value;
+            const transportadora = document.getElementById('filtro_transportadora').value;
+            const nf = document.getElementById('filtro_nf').value.trim();
+
+            const achado = agendamentos.find(i => i.seller === seller && i.transportadora === transportadora && String(i.nota_fiscal) === nf);
+            const resEl = document.getElementById('resultado-pesquisa');
+            resEl.classList.remove('hidden');
+            document.getElementById('res-nf').textContent = nf;
+
+            if (achado) {
+                document.getElementById('res-encontrado').classList.remove('hidden');
+                document.getElementById('res-nao-encontrado').classList.add('hidden');
+                document.getElementById('res-etapa').textContent = achado.status_etapa || '—';
+                document.getElementById('res-previsao').textContent = formatarData(achado.data_agendamento);
+                document.getElementById('res-latam').textContent = achado.liberado_latam ? 'Liberado para Coleta' : 'Pendente / Bloqueado';
+            } else {
+                document.getElementById('res-encontrado').classList.add('hidden');
+                document.getElementById('res-nao-encontrado').classList.remove('hidden');
+            }
+        }
+
+        async function alternarLatam(id, novoEstado) {
+            try {
+                await api(`/api/agendamentos/${id}/latam`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ liberado_latam: novoEstado }),
+                });
+                carregarAgendamentos();
+            } catch (err) {
+                alert('Erro ao atualizar: ' + err.message);
+            }
+        }
+
+        // Verifica sessão ao carregar a página
+        api('/api/me')
+            .then(u => { currentUser = u; mostrarApp(); })
+            .catch(() => mostrarLogin());
+    </script>
+</body>
+</html>
