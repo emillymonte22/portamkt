@@ -197,7 +197,6 @@ async function listarEntregas(env, p) {
 
   const busca = (p.get('busca') || '').trim();
 
-  // Sem data informada, mostra só o ano corrente; na busca por número procura em todo o histórico
   const ano = new Date().getFullYear();
   const de = p.get('de') || (busca ? '' : `${ano}-01-01`);
   if (de) {
@@ -226,8 +225,9 @@ async function listarEntregas(env, p) {
   const where = filtros.length ? `WHERE ${filtros.join(' AND ')}` : '';
   const pagina = Math.max(1, parseInt(p.get('pagina'), 10) || 1);
 
+  // AGRUPAMENTO POR PEDIDO PARA GARANTIR QUE NÃO HAJA DUPLICADOS DE PEDIDO_COMPRA
   const { results } = await env.DB.prepare(
-    `SELECT * FROM entregas_mkt ${where} ORDER BY dt_pedido DESC, pedido DESC LIMIT ? OFFSET ?`
+    `SELECT * FROM entregas_mkt ${where} GROUP BY pedido ORDER BY dt_pedido DESC, pedido DESC LIMIT ? OFFSET ?`
   ).bind(...valores, ITENS_POR_PAGINA + 1, (pagina - 1) * ITENS_POR_PAGINA).all();
 
   const itens = results || [];
@@ -235,7 +235,6 @@ async function listarEntregas(env, p) {
   return Response.json({ itens: itens.slice(0, ITENS_POR_PAGINA), tem_mais, pagina, por_pagina: ITENS_POR_PAGINA });
 }
 
-// As listas dos filtros só mudam quando o Job roda (1x por dia), então ficam em memória por 30 min
 let cacheFiltros = null;
 const CACHE_FILTROS_MS = 30 * 60 * 1000;
 
