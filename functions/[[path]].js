@@ -225,7 +225,6 @@ async function listarEntregas(env, p) {
   const where = filtros.length ? `WHERE ${filtros.join(' AND ')}` : '';
   const pagina = Math.max(1, parseInt(p.get('pagina'), 10) || 1);
 
-  // AGRUPAMENTO POR PEDIDO PARA GARANTIR QUE NÃO HAJA DUPLICADOS DE PEDIDO_COMPRA
   const { results } = await env.DB.prepare(
     `SELECT * FROM entregas_mkt ${where} GROUP BY pedido ORDER BY dt_pedido DESC, pedido DESC LIMIT ? OFFSET ?`
   ).bind(...valores, ITENS_POR_PAGINA + 1, (pagina - 1) * ITENS_POR_PAGINA).all();
