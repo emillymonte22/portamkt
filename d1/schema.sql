@@ -8,17 +8,17 @@ CREATE TABLE IF NOT EXISTS usuarios (
 );
 
 CREATE TABLE IF NOT EXISTS agendamentos (
-  id               INTEGER PRIMARY KEY AUTOINCREMENT,
-  seller           TEXT NOT NULL,
-  transportadora   TEXT NOT NULL,
-  motorista        TEXT NOT NULL,
-  veiculo_placa    TEXT NOT NULL,
-  nota_fiscal      TEXT NOT NULL,
-  tipo_carga       TEXT NOT NULL,
-  data_agendamento TEXT NOT NULL,
-  status_etapa     TEXT DEFAULT 'Emissão do Pedido',
-  criado_em        DATETIME DEFAULT CURRENT_TIMESTAMP,
-  liberado_latam   INTEGER NOT NULL DEFAULT 0
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  seller         TEXT NOT NULL,
+  transportadora TEXT NOT NULL,
+  nota_fiscal    TEXT NOT NULL, -- uma ou mais NFs, só números, separadas por "/"
+  cte            TEXT,
+  data_coleta    TEXT,
+  data_cte       TEXT,
+  entrega_cd     TEXT,
+  status_etapa   TEXT DEFAULT 'Emissão do Pedido',
+  liberado_latam INTEGER NOT NULL DEFAULT 0, -- 1 = admin liberou para o CD
+  criado_em      DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Tabelas espelhadas do Databricks (preenchidas pelo Job databricks/sync_d1.py).

@@ -222,7 +222,7 @@
                                 <h3 class="text-base font-bold text-slate-800">Inclusão de Coletas (LATAM)</h3>
                                 <p class="text-xs text-slate-500">Registe dados de NFs, CT-es e coletas para envio automático à aba de Disponíveis para Coleta</p>
                             </div>
-                            <button onclick="toggleFormAgendamento()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition shadow-sm">+ Incluir Coleta LATAM</button>
+                            <button id="btn-incluir-coleta" onclick="toggleFormAgendamento()" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition shadow-sm">+ Incluir Coleta LATAM</button>
                         </div>
 
                         <!-- Formulário de Inclusão (Oculto por padrão) -->
@@ -243,7 +243,7 @@
                                 </div>
                                 <div>
                                     <label class="block text-xs font-semibold text-slate-600 mb-1">Nota Fiscal (NF)</label>
-                                    <input type="text" id="novo_nf" required placeholder="Ex: 617944" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+                                    <input type="text" id="novo_nf" required placeholder="Ex: 617944/617945" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
                                 </div>
                                 <div>
                                     <label class="block text-xs font-semibold text-slate-600 mb-1">CT-e</label>
@@ -451,6 +451,8 @@
                 'cd-coleta': ['cd', 'admin'].includes(currentUser.perfil),
                 'admin-painel': currentUser.perfil === 'admin',
             };
+            // Só o admin inclui coletas (a API também confere)
+            document.getElementById('btn-incluir-coleta').classList.toggle('hidden', currentUser.perfil !== 'admin');
             for (const [aba, mostrar] of Object.entries(visivel)) {
                 const el = document.getElementById('menu-' + aba);
                 if (el) {
@@ -513,12 +515,19 @@
         }
 
         function buscarEntregas(e) {
-            if (e) { e.preventDefault(); paginaEntregas = 1; }
+            if (e) { e.preventDefault(); paginaEntregas = 1; cursores = [null]; }
             carregarEntregas();
         }
 
+        // A API pagina por cursor (data + pedido do último item); guardamos o cursor de cada página
+        // para o botão "Anterior" conseguir voltar
+        let cursores = [null];
+        let proximoCursor = null;
+
         function mudarPagina(delta) {
-            paginaEntregas += delta;
+            if (delta > 0 && proximoCursor) cursores.push(proximoCursor);
+            if (delta < 0 && cursores.length > 1) cursores.pop();
+            paginaEntregas = cursores.length;
             carregarEntregas();
         }
 
@@ -531,7 +540,12 @@
 
         async function carregarEntregas() {
             const tbody = document.getElementById('tabela-entregas');
-            const params = new URLSearchParams({ pagina: paginaEntregas });
+            const params = new URLSearchParams();
+            const cursor = cursores[cursores.length - 1];
+            if (cursor) {
+                params.set('apos_data', cursor.apos_data);
+                params.set('apos_pedido', cursor.apos_pedido);
+            }
             const campos = { seller: 'f_seller', status: 'f_status', de: 'f_de', ate: 'f_ate', busca: 'f_busca' };
             for (const [param, id] of Object.entries(campos)) {
                 const v = document.getElementById(id).value.trim();
@@ -544,6 +558,7 @@
                 const resposta = await api('/api/entregas?' + params);
                 const itensRaw = resposta.itens || [];
                 temMais = resposta.tem_mais;
+                proximoCursor = resposta.proximo;
 
                 const vistos = new Set();
                 const itens = [];
@@ -615,7 +630,7 @@
                 document.getElementById('novo_data_cte').value = '';
                 document.getElementById('novo_entrega_cd').value = '';
                 carregarAgendamentos();
-                alert('Coleta LATAM incluída e enviada para a aba de disponíveis com sucesso!');
+                alert('Coleta LATAM incluída! Ela aparece para o CD depois que o admin liberar no Painel Admin.');
             } catch (err) {
                 alert('Erro ao incluir coleta: ' + err.message);
             }
@@ -655,40 +670,48 @@
 
             resBox.classList.remove('hidden');
             document.getElementById('res-nf').textContent = nf;
+            notFoundEl.textContent = 'Nenhuma coleta encontrada com esses dados.';
 
             const ehBrascol = sellerSelecionado.toUpperCase().includes('BRASCOL');
             latamContainer.classList.toggle('hidden', !ehBrascol);
 
             try {
-                const tracking = await api('/api/tracking?nf=' + encodeURIComponent(nf));
-                if (tracking && tracking.length > 0) {
+                // tracking = Databricks (coleta, CT-e, embarque, entrega no CD)
+                // entrega  = pedido do marketplace (faturamento CD e entrega ao cliente)
+                // coleta   = coleta LATAM incluída no portal (datas digitadas e liberação do admin)
+                const { tracking, entrega, coleta } = await api('/api/consulta?nf=' + encodeURIComponent(nf));
+                const t = tracking || {};
+                const en = entrega || {};
+                const co = coleta || {};
+                if (tracking || entrega || coleta) {
                     foundEl.classList.remove('hidden');
                     notFoundEl.classList.add('hidden');
 
-                    const t = tracking[0];
+                    // Da etapa mais avançada para a menos avançada
                     let ultimoStatus = 'Em processamento';
-
-                    if (t.dt_entrega) {
+                    if (en.dt_entrega) {
                         ultimoStatus = 'Entregue ao Cliente';
-                    } else if (t.dt_faturamento) {
+                    } else if (en.dt_faturamento) {
                         ultimoStatus = 'Faturamento CD Concluído';
-                    } else if (t.data_entrega) {
+                    } else if (t.data_entrega || co.entrega_cd) {
                         ultimoStatus = 'Entregue no CD';
                     } else if (t.data_embarque) {
                         ultimoStatus = 'Embarcado';
-                    } else if (t.emissao_cte) {
+                    } else if (t.emissao_cte || co.data_cte) {
                         ultimoStatus = 'CTE Emitido';
-                    } else if (t.data_coleta) {
+                    } else if (t.data_coleta || co.data_coleta) {
                         ultimoStatus = 'Coleta Realizada';
                     } else if (t.emissao) {
                         ultimoStatus = 'Nota Fiscal Emitida pelo Seller';
-                    } else if (t.status_etapa) {
-                        ultimoStatus = t.status_etapa;
+                    } else if (co.status_etapa) {
+                        ultimoStatus = co.status_etapa;
                     }
 
                     document.getElementById('res-etapa').textContent = ultimoStatus;
                     if (ehBrascol) {
-                        document.getElementById('res-latam').textContent = t.liberado_latam ? 'Liberado' : 'Aguardando liberação';
+                        document.getElementById('res-latam').textContent = !coleta
+                            ? 'Coleta não incluída'
+                            : co.liberado_latam ? 'Liberado para o CD' : 'Aguardando liberação do admin';
                     }
                 } else {
                     foundEl.classList.add('hidden');

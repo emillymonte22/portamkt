@@ -54,8 +54,8 @@ Login com usuário e senha (tabela `usuarios`). Três perfis:
 | Perfil | Vê | Pode |
 |---|---|---|
 | `comercial` | Consultas, Indicadores, Relatórios | Só consultar |
-| `cd` | Tudo do comercial + "Disponível para Coleta (LATAM)" | Criar agendamentos |
-| `admin` | Tudo + "Painel Admin (Sinalização)" | Criar agendamentos e liberar/revogar cargas LATAM para coleta |
+| `cd` | Tudo do comercial + "Disponível para Coleta (LATAM)" | Só consultar |
+| `admin` | Tudo + "Painel Admin (Sinalização)" | **Incluir coletas LATAM** e liberar/bloquear cargas para o CD |
 
 ## 5. Autenticação e segurança (como funciona)
 
@@ -73,11 +73,12 @@ Login com usuário e senha (tabela `usuarios`). Três perfis:
 | `POST /api/logout` | qualquer | apaga o cookie |
 | `GET /api/me` | logado | `{username, perfil}` |
 | `GET /api/agendamentos` | logado | últimos 100 agendamentos |
-| `POST /api/agendamentos` | admin, cd | cria agendamento |
-| `PATCH /api/agendamentos/:id/latam` `{liberado_latam: true/false}` | admin | libera/revoga coleta LATAM |
-| `GET /api/entregas?seller=&status=&de=&ate=&busca=&pagina=` | logado | `{itens, tem_mais, pagina, por_pagina}` (50 por página). Sem data, mostra o ano corrente; `busca` (NF, pedido ou ordem) procura em todo o histórico. **Não retorna total** (ver regra 11) |
+| `POST /api/agendamentos` `{seller, transportadora, nota_fiscal, cte, data_coleta, data_cte, entrega_cd, status_etapa}` | admin | inclui coleta LATAM. `nota_fiscal` aceita várias NFs separadas por `/`. **Nasce bloqueada** (`liberado_latam = 0`) |
+| `PATCH /api/agendamentos/:id/latam` `{liberado_latam: true/false}` | admin | libera (avisa o CD) ou bloqueia a coleta |
+| `GET /api/entregas?seller=&status=&de=&ate=&busca=&apos_data=&apos_pedido=` | logado | `{itens, tem_mais, proximo, por_pagina}` (50 pedidos por página, sem repetir pedido). Paginação por **cursor**: para a próxima página, envie `apos_data`/`apos_pedido` de `proximo`. Sem data, mostra o ano corrente. `busca`: número exato de NF, pedido ou ordem em todo o histórico; se não achar, busca "contém" no ano. **Não retorna total** (ver regra 12) |
 | `GET /api/entregas/filtros` | logado | `{sellers: [...], status: [...]}` para preencher os selects |
 | `GET /api/tracking?nf=` | logado | itens da NF na tabela de tracking aéreo |
+| `GET /api/consulta?nf=` | logado | `{tracking, entrega, coleta}`: a NF nas três fontes (tracking do Databricks, pedido do marketplace e coleta LATAM do portal). Usada na "Consulta de coletas" para calcular o status |
 | `GET /api/sync-status` | logado | data/hora da última sincronização com o Databricks |
 
 No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `public/index.html`, que já trata 401 e erros.
@@ -86,12 +87,13 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 
 **Tabelas do portal** (editadas pelo portal):
 - `usuarios` — `id, username, senha (hash), perfil`
-- `agendamentos` — `id, seller, transportadora, motorista, veiculo_placa, nota_fiscal, tipo_carga, data_agendamento, status_etapa, criado_em, liberado_latam (0/1)`
+- `agendamentos` (coletas LATAM) — `id, seller, transportadora, nota_fiscal (uma ou mais NFs só com números, separadas por "/", ex.: 617944/617945), cte, data_coleta, data_cte, entrega_cd, status_etapa, liberado_latam (0 = bloqueada, 1 = liberada para o CD), criado_em`. Só o admin inclui; a coleta nasce bloqueada e o admin libera no Painel Admin.
 
 **Tabelas espelhadas do Databricks** (somente leitura para o portal; o Job apaga/insere a cada hora — **não editar à mão nem pelo portal**):
 - `entregas_mkt` ← `bemolonline.bol.dados_entregas_mkt_manifest_01`. Um pedido do marketplace por linha. Colunas principais: `pedido, ordem, nf, n_fornecedor (seller), dt_pedido, dt_liberacao, dt_faturamento, dt_entrega, no_prazo (NO PRAZO | SEM ENTREGA | FORA DO PRAZO), cidade, bairro, zona, uf, nota_fiscal_explode, data_coleta, emissao_cte, data_embarque, data_entrega`.
 - `tracking_aereo` ← `comercial.logint.f_tracking_aereo`. Um item de NF por linha, com CT-e, transportadora, datas de coleta/embarque/entrega, material e valores. A coluna `etapa` vem em código do sistema (`MANIFEST_01`, `VLPOSTNG_01`, `SCHEDULE_01`…), ainda sem tradução.
 - `sync_log` — uma linha por execução do Job (`tabela, executado_em, total_origem, inseridos, removidos`).
+- **Onde está cada campo** (não confundir): `dt_faturamento`, `dt_entrega` e `no_prazo` só existem em `entregas_mkt`; `data_coleta`, `emissao_cte`, `data_embarque`, `data_entrega` (entrega no CD) e `emissao` estão em `tracking_aereo`; `liberado_latam`, `cte`, `entrega_cd` e `status_etapa` só em `agendamentos`.
 - Ligação entre as duas: `entregas_mkt.nota_fiscal_explode = tracking_aereo.nota_fiscal_explode` (texto com 10 dígitos e zeros à esquerda, ex.: `0000616662`).
 - Todas as datas são texto `AAAA-MM-DD`.
 
@@ -105,9 +107,10 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 6. **Novo menu/aba:** adicionar o botão `id="menu-<nome>"`, o conteúdo `id="conteudo-<nome>"` e a entrada no objeto `MENUS` em `public/index.html` (o `mudarAba` usa esse objeto para destacar o menu certo).
 7. **Não colocar senhas, tokens ou secrets em nenhum arquivo** do repositório.
 8. **Não alterar as tabelas `entregas_mkt`, `tracking_aereo` e `sync_log` pelo portal** — elas são sobrescritas pelo Job.
-9. Mudança de estrutura no banco: criar um arquivo novo `d1/migracao_00X_<descricao>.sql`, aplicar com o comando da seção 9 e atualizar `d1/schema.sql`.
-11. **Limites do plano grátis do D1:** 5 milhões de linhas lidas e 100 mil gravadas por dia. Não usar `COUNT(*)` nem consultas sem `WHERE`/`LIMIT` na tabela inteira a cada abertura de tela; não criar índices sem necessidade (cada índice multiplica as gravações do Job).
+9. **Coluna nova no banco exige migração ANTES de usar no código.** Se a API passar a gravar/ler uma coluna que não existe, dá "Erro interno". Mudança de estrutura no banco: criar um arquivo novo `d1/migracao_00X_<descricao>.sql`, aplicar com o comando da seção 9 e atualizar `d1/schema.sql`.
 10. Manter o visual: Tailwind, azul Bemol `#003366` / `#002B49`, cartões `bg-white rounded-2xl shadow-sm border border-slate-200`.
+11. Só o admin inclui coletas LATAM; o status LATAM na consulta aparece só para o seller Brascol.
+12. **Limites do plano grátis do D1:** 5 milhões de linhas lidas e 100 mil gravadas por dia. Não usar `COUNT(*)` nem consultas sem `WHERE`/`LIMIT` na tabela inteira a cada abertura de tela; não criar índices sem necessidade (cada índice multiplica as gravações do Job).
 
 ## 9. Como publicar e testar
 
@@ -132,6 +135,8 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
   `databricks workspace import /Users/emillymonte@bemol.com.br/portamkt/sync_d1 --file databricks/sync_d1.py --language PYTHON --format SOURCE --overwrite`
 
 ## 11. Pendências conhecidas
+
+- **Aplicar no banco real** (depois que o limite diário do D1 zerar, 20h de Manaus): `d1/migracao_002_indices_leves.sql` e `d1/migracao_003_coletas_latam.sql`. Até aplicar a 003, incluir coleta dá erro.
 
 - Traduzir os códigos da coluna `etapa` (`MANIFEST_01`, `VLPOSTNG_01`, …) para nomes legíveis.
 - Abas "Indicadores" e "Extrair Relatório" ainda são placeholders.

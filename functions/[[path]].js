@@ -35,7 +35,7 @@ export async function onRequest(context) {
     if (path === '/api/agendamentos') {
       if (request.method === 'GET') return await listarAgendamentos(env);
       if (request.method === 'POST') {
-        if (!['admin', 'cd'].includes(usuario.perfil)) return erro(403, 'Sem permissão');
+        if (usuario.perfil !== 'admin') return erro(403, 'Apenas o administrador pode incluir coletas');
         return await criarAgendamento(request, env);
       }
     }
@@ -49,6 +49,7 @@ export async function onRequest(context) {
     if (path === '/api/entregas' && request.method === 'GET') return await listarEntregas(env, url.searchParams);
     if (path === '/api/entregas/filtros' && request.method === 'GET') return await filtrosEntregas(env);
     if (path === '/api/tracking' && request.method === 'GET') return await listarTracking(env, url.searchParams);
+    if (path === '/api/consulta' && request.method === 'GET') return await consultarNf(env, url.searchParams);
     if (path === '/api/sync-status' && request.method === 'GET') return await statusSync(env);
 
     return erro(404, 'Rota não encontrada');
@@ -73,10 +74,16 @@ async function login(request, env) {
   if (user && user.senha.startsWith('pbkdf2$')) {
     valido = await verificarSenha(senha, user.senha);
   } else if (user) {
+    // Senha ainda em texto puro (cadastro antigo): confere e tenta converter para hash.
+    // Se a gravação falhar (ex.: limite diário do D1), o login segue e tenta de novo na próxima vez.
     valido = iguais(senha, user.senha);
     if (valido) {
-      await env.DB.prepare('UPDATE usuarios SET senha = ? WHERE id = ?')
-        .bind(await gerarHashSenha(senha), user.id).run();
+      try {
+        await env.DB.prepare('UPDATE usuarios SET senha = ? WHERE id = ?')
+          .bind(await gerarHashSenha(senha), user.id).run();
+      } catch (err) {
+        console.error('Não foi possível converter a senha para hash', err);
+      }
     }
   }
   if (!valido) return erro(401, 'Utilizador ou senha incorretos');
@@ -160,25 +167,40 @@ async function criarAgendamento(request, env) {
   if (obrigatorios.some(c => typeof b[c] !== 'string' || !b[c].trim())) {
     return erro(400, `Campos obrigatórios: ${obrigatorios.join(', ')}`);
   }
-  
-  // Se for LATAM, por padrão já nasce liberado para coleta conforme solicitado
-  const liberadoLatam = (b.transportadora || '').toUpperCase() === 'LATAM' ? 1 : 0;
 
+  // Várias NFs separadas por "/" (ex.: "617944/617945"); guarda só os números, sem zeros à esquerda
+  const notas = normalizarNotas(b.nota_fiscal);
+  if (!notas) return erro(400, 'Informe ao menos uma NF (separe várias com "/")');
+
+  const datas = {};
+  for (const campo of ['data_coleta', 'data_cte', 'entrega_cd']) {
+    const v = b[campo] || null;
+    if (v !== null && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return erro(400, `${campo} inválida`);
+    datas[campo] = v;
+  }
+
+  // A coleta nasce bloqueada: o admin libera depois pelo Painel Admin, avisando o CD
   await env.DB.prepare(
     `INSERT INTO agendamentos (seller, transportadora, nota_fiscal, cte, data_coleta, data_cte, entrega_cd, status_etapa, liberado_latam)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`
   ).bind(
-    b.seller, 
-    b.transportadora, 
-    b.nota_fiscal, 
-    b.cte || '', 
-    b.data_coleta || null, 
-    b.data_cte || null, 
-    b.entrega_cd || null,
-    b.status_etapa || 'Emissão do Pedido',
-    liberadoLatam
+    b.seller.trim(),
+    b.transportadora.trim(),
+    notas,
+    String(b.cte || '').trim().slice(0, 200),
+    datas.data_coleta,
+    datas.data_cte,
+    datas.entrega_cd,
+    String(b.status_etapa || 'Emissão do Pedido').slice(0, 60),
   ).run();
   return Response.json({ success: true });
+}
+
+function normalizarNotas(texto) {
+  const notas = String(texto).split('/')
+    .map(n => n.replace(/\D/g, '').replace(/^0+/, ''))
+    .filter(Boolean);
+  return [...new Set(notas)].join('/');
 }
 
 async function alterarLiberacaoLatam(request, env, id) {
@@ -223,28 +245,67 @@ async function listarEntregas(env, p) {
     valores.push(ate);
   }
 
-  if (busca) {
-    if (/^\d{1,20}$/.test(busca)) {
-      const n = Number(busca);
-      const nfStr = nfTracking(busca);
-      filtros.push('(nf = ? OR pedido = ? OR ordem = ? OR nota_fiscal_explode = ? OR CAST(pedido AS TEXT) = ? OR CAST(ordem AS TEXT) = ?)');
-      valores.push(n, n, n, nfStr, busca, busca);
-    } else {
-      filtros.push('(CAST(pedido AS TEXT) LIKE ? OR CAST(ordem AS TEXT) LIKE ? OR CAST(nf AS TEXT) LIKE ?)');
-      valores.push(`%${busca}%`, `%${busca}%`, `%${busca}%`);
-    }
+  // Paginação por cursor (data + pedido do último item da página anterior): usa o índice
+  // idx_entregas_data e lê só as linhas da página, em vez de pular linhas com OFFSET.
+  const aposData = p.get('apos_data');
+  const aposPedido = Number(p.get('apos_pedido'));
+  if (aposData && aposPedido) {
+    filtros.push('(dt_pedido, pedido) < (?, ?)');
+    valores.push(aposData, aposPedido);
   }
 
+  if (!busca) return Response.json(await paginaEntregas(env, filtros, valores));
+
+  // Busca por número de NF, pedido ou ordem (aceita digitar com pontos, traços etc.)
+  const numero = busca.replace(/\D/g, '');
+  if (!numero || numero.length > 18) return erro(400, 'Busque por número de NF, pedido ou ordem');
+
+  // 1º: número exato, usando os índices (leve)
+  const n = Number(numero);
+  const exata = await paginaEntregas(env,
+    [...filtros, '(nf = ? OR pedido = ? OR ordem = ? OR nota_fiscal_explode = ?)'],
+    [...valores, n, n, n, nfTracking(numero)]);
+  if (exata.itens.length || aposData || numero.length < 4) return Response.json(exata);
+
+  // 2º: nada exato → busca parcial ("contém"), limitada ao período (ano corrente se não informado)
+  // para não ler a tabela inteira
+  const filtrosParcial = [...filtros];
+  const valoresParcial = [...valores];
+  if (!p.get('de') && !p.get('ate')) {
+    const ano = new Date().getFullYear();
+    filtrosParcial.push('dt_pedido BETWEEN ? AND ?');
+    valoresParcial.push(`${ano}-01-01`, `${ano}-12-31`);
+  }
+  const contem = `%${numero}%`;
+  filtrosParcial.push('(CAST(pedido AS TEXT) LIKE ? OR CAST(ordem AS TEXT) LIKE ? OR CAST(nf AS TEXT) LIKE ? OR nota_fiscal_explode LIKE ?)');
+  valoresParcial.push(contem, contem, contem, contem);
+  return Response.json(await paginaEntregas(env, filtrosParcial, valoresParcial));
+}
+
+// Busca até 3x o tamanho da página e junta as linhas repetidas do mesmo pedido
+// (elas vêm lado a lado por causa da ordenação), sem GROUP BY, que obrigaria a ler tudo.
+async function paginaEntregas(env, filtros, valores) {
   const where = filtros.length ? `WHERE ${filtros.join(' AND ')}` : '';
-  const pagina = Math.max(1, parseInt(p.get('pagina'), 10) || 1);
-
+  const limite = ITENS_POR_PAGINA * 3;
   const { results } = await env.DB.prepare(
-    `SELECT * FROM entregas_mkt ${where} GROUP BY pedido ORDER BY dt_pedido DESC, pedido DESC LIMIT ? OFFSET ?`
-  ).bind(...valores, ITENS_POR_PAGINA + 1, (pagina - 1) * ITENS_POR_PAGINA).all();
+    `SELECT * FROM entregas_mkt ${where} ORDER BY dt_pedido DESC, pedido DESC LIMIT ?`
+  ).bind(...valores, limite).all();
 
-  const itens = results || [];
-  const tem_mais = itens.length > ITENS_POR_PAGINA;
-  return Response.json({ itens: itens.slice(0, ITENS_POR_PAGINA), tem_mais, pagina, por_pagina: ITENS_POR_PAGINA });
+  const linhas = results || [];
+  const itens = [];
+  for (const linha of linhas) {
+    const anterior = itens[itens.length - 1];
+    if (anterior && linha.pedido !== null && anterior.pedido === linha.pedido) continue;
+    itens.push(linha);
+  }
+  const pagina = itens.slice(0, ITENS_POR_PAGINA);
+  const ultimo = pagina[pagina.length - 1];
+  return {
+    itens: pagina,
+    tem_mais: itens.length > ITENS_POR_PAGINA || linhas.length === limite,
+    proximo: ultimo ? { apos_data: ultimo.dt_pedido, apos_pedido: ultimo.pedido } : null,
+    por_pagina: ITENS_POR_PAGINA,
+  };
 }
 
 let cacheFiltros = null;
@@ -271,6 +332,30 @@ async function listarTracking(env, p) {
     'SELECT * FROM tracking_aereo WHERE nota_fiscal_explode = ? ORDER BY descricao_material'
   ).bind(nfTracking(nf)).all();
   return Response.json(results || []);
+}
+
+// Consulta de uma NF juntando as três fontes: tracking (coleta/CT-e/embarque/entrega no CD),
+// pedido do marketplace (faturamento e entrega ao cliente) e a coleta LATAM incluída no portal.
+async function consultarNf(env, p) {
+  const numero = (p.get('nf') || '').replace(/\D/g, '').replace(/^0+/, '');
+  if (!numero || numero.length > 10) return erro(400, 'Informe a NF (só números)');
+
+  const [tracking, entrega, coleta] = await env.DB.batch([
+    env.DB.prepare('SELECT * FROM tracking_aereo WHERE nota_fiscal_explode = ? LIMIT 1').bind(nfTracking(numero)),
+    env.DB.prepare(
+      `SELECT pedido, n_fornecedor, dt_faturamento, dt_entrega, no_prazo, nf
+       FROM entregas_mkt WHERE nota_fiscal_explode = ? ORDER BY dt_entrega DESC, dt_faturamento DESC LIMIT 1`
+    ).bind(nfTracking(numero)),
+    // agendamentos.nota_fiscal guarda várias NFs separadas por "/" (tabela pequena)
+    env.DB.prepare(`SELECT * FROM agendamentos WHERE '/' || nota_fiscal || '/' LIKE ? ORDER BY id DESC LIMIT 1`)
+      .bind(`%/${numero}/%`),
+  ]);
+
+  return Response.json({
+    tracking: tracking.results[0] || null,
+    entrega: entrega.results[0] || null,
+    coleta: coleta.results[0] || null,
+  });
 }
 
 function nfTracking(nf) {
