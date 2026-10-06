@@ -76,7 +76,7 @@
 
                 <!-- Menu Exclusivo Admin -->
                 <button onclick="mudarAba('admin-painel')" id="menu-admin-painel" class="w-full hidden items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition border border-amber-600/40 mt-2">
-                    <span>⚙️</span>
+                    <span>⚙️️</span>
                     <span>Painel Admin (Sinalização)</span>
                 </button>
             </div>
@@ -144,20 +144,24 @@
                             <table class="w-full text-left text-sm text-slate-600">
                                 <thead class="bg-slate-50 text-slate-700 uppercase text-xs">
                                     <tr>
-                                        <th class="p-3">Pedido</th>
-                                        <th class="p-3">Seller</th>
-                                        <th class="p-3">NF</th>
-                                        <th class="p-3">Dt Pedido</th>
-                                        <th class="p-3">Faturamento</th>
-                                        <th class="p-3">Coleta</th>
-                                        <th class="p-3">Embarque</th>
-                                        <th class="p-3">Entrega</th>
+                                        <th class="p-3">PEDIDO_COMPRA</th>
+                                        <th class="p-3">N_FORNECEDOR</th>
+                                        <th class="p-3">DT_PEDIDO</th>
+                                        <th class="p-3">NOTA SELLER</th>
+                                        <th class="p-3">DT_NF_SELLER</th>
+                                        <th class="p-3">data_coleta</th>
+                                        <th class="p-3">emissao_cte</th>
+                                        <th class="p-3">data_embarque</th>
+                                        <th class="p-3">ENTREGA CD</th>
+                                        <th class="p-3">DT_FATURAMENTO_CD</th>
+                                        <th class="p-3">NOTA BEMOL</th>
+                                        <th class="p-3">DT_ENTREGA_CLIENTE</th>
                                         <th class="p-3">Destino</th>
                                         <th class="p-3">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tabela-entregas" class="divide-y divide-slate-200">
-                                    <tr><td colspan="10" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>
+                                    <tr><td colspan="14" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -473,22 +477,26 @@
                 const { itens, total } = await api('/api/entregas?' + params);
                 totalEntregas = total;
                 tbody.innerHTML = itens.length === 0
-                    ? '<tr><td colspan="10" class="p-4 text-center text-slate-400">Nenhum pedido encontrado.</td></tr>'
+                    ? '<tr><td colspan="14" class="p-4 text-center text-slate-400">Nenhum pedido encontrado.</td></tr>'
                     : itens.map(i => `
                         <tr class="hover:bg-slate-50">
                             <td class="p-3 font-medium text-slate-900">${esc(i.pedido)}</td>
                             <td class="p-3">${esc(i.n_fornecedor)}</td>
-                            <td class="p-3 font-semibold text-[#003366]">${esc(i.nf || '—')}</td>
                             <td class="p-3">${formatarData(i.dt_pedido)}</td>
-                            <td class="p-3">${formatarData(i.dt_faturamento)}</td>
+                            <td class="p-3">${esc(i.nota_fiscal_explode || '—')}</td>
+                            <td class="p-3">${formatarData(i.emissao)}</td>
                             <td class="p-3">${formatarData(i.data_coleta)}</td>
+                            <td class="p-3">${formatarData(i.emissao_cte)}</td>
                             <td class="p-3">${formatarData(i.data_embarque)}</td>
-                            <td class="p-3">${formatarData(i.dt_entrega)}</td>
+                            <td class="p-3">${formatarData(i.data_entrega)}</td>
+                            <td class="p-3">${formatarData(i.DT_FATURAMENTO)}</td>
+                            <td class="p-3 font-semibold text-[#003366]">${esc(i.nf || '—')}</td>
+                            <td class="p-3">${formatarData(i.DT_ENTREGA)}</td>
                             <td class="p-3">${esc([i.bairro, i.cidade].filter(Boolean).join(', '))}${i.uf ? ' - ' + esc(i.uf) : ''}</td>
                             <td class="p-3"><span class="${corStatus(i.no_prazo)} text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap">${esc(i.no_prazo || '—')}</span></td>
                         </tr>`).join('');
             } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="10" class="p-4 text-center text-red-500">${esc(err.message)}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="14" class="p-4 text-center text-red-500">${esc(err.message)}</td></tr>`;
                 totalEntregas = 0;
             }
 
@@ -524,60 +532,58 @@
 
             const latamLiberados = agendamentos.filter(i => i.transportadora === 'LATAM' && i.liberado_latam);
             document.getElementById('tabela-cd-latam').innerHTML = latamLiberados.length === 0
-                ? '<tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhuma carga LATAM liberada para coleta no momento.</td></tr>'
+                ? '<tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhuma carga liberada no momento.</td></tr>'
                 : latamLiberados.map(item => `
-                    <tr class="hover:bg-sky-50">
+                    <tr class="hover:bg-slate-50">
                         <td class="p-3 font-medium text-slate-900">${esc(item.seller)}</td>
                         <td class="p-3 font-semibold text-[#003366]">${esc(item.nota_fiscal)}</td>
                         <td class="p-3">${esc(item.motorista)}</td>
                         <td class="p-3">${esc(item.veiculo_placa)}</td>
-                        <td class="p-3 font-medium text-slate-700">${formatarData(item.data_agendamento)}</td>
-                        <td class="p-3"><span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">Disponível para Recolha</span></td>
+                        <td class="p-3">${formatarData(item.data_agendamento)}</td>
+                        <td class="p-3"><span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">LIBERADA LATAM</span></td>
                     </tr>`).join('');
 
-            if (currentUser.perfil === 'admin') {
-                const latam = agendamentos.filter(i => i.transportadora === 'LATAM');
-                document.getElementById('tabela-admin-sinalizacao').innerHTML = latam.length === 0
-                    ? '<tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhuma carga LATAM registada.</td></tr>'
-                    : latam.map(item => `
-                        <tr class="hover:bg-slate-50">
-                            <td class="p-3 font-medium text-slate-900">${esc(item.seller)}</td>
-                            <td class="p-3">${esc(item.transportadora)}</td>
-                            <td class="p-3 font-semibold text-[#003366]">${esc(item.nota_fiscal)}</td>
-                            <td class="p-3">${formatarData(item.data_agendamento)}</td>
-                            <td class="p-3"><span class="${item.liberado_latam ? 'text-emerald-600 font-semibold' : 'text-amber-600 font-medium'}">${item.liberado_latam ? 'Liberado' : 'Pendente'}</span></td>
-                            <td class="p-3 text-center">
-                                <button onclick="alternarLiberacaoLatam(${Number(item.id)}, ${!item.liberado_latam})" class="px-3 py-1.5 rounded-lg text-xs font-semibold ${item.liberado_latam ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-emerald-600 text-white hover:bg-emerald-700'} transition">
-                                    ${item.liberado_latam ? 'Revogar Liberação' : 'Liberar para Coleta'}
-                                </button>
-                            </td>
-                        </tr>`).join('');
-            }
+            document.getElementById('tabela-admin-sinalizacao').innerHTML = agendamentos.length === 0
+                ? '<tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhum agendamento para gerir.</td></tr>'
+                : agendamentos.map(item => `
+                    <tr class="hover:bg-slate-50">
+                        <td class="p-3 font-medium text-slate-900">${esc(item.seller)}</td>
+                        <td class="p-3">${esc(item.transportadora)}</td>
+                        <td class="p-3 font-semibold text-[#003366]">${esc(item.nota_fiscal)}</td>
+                        <td class="p-3">${formatarData(item.data_agendamento)}</td>
+                        <td class="p-3"><span class="${item.liberado_latam ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'} text-xs px-2.5 py-1 rounded-full font-medium">${item.liberado_latam ? 'Liberada para Coleta' : 'Bloqueada'}</span></td>
+                        <td class="p-3 text-center">
+                            <button onclick="alternarLatam(${item.id}, ${!item.liberado_latam})" class="px-3 py-1.5 rounded-lg text-xs font-semibold ${item.liberado_latam ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-emerald-600 text-white hover:bg-emerald-700'} transition">
+                                ${item.liberado_latam ? 'Revogar Coleta' : 'Liberar Coleta'}
+                            </button>
+                        </td>
+                    </tr>`).join('');
         }
 
-        function consultarOperacao(e) {
+        async function consultarOperacao(e) {
             e.preventDefault();
             const seller = document.getElementById('filtro_seller').value;
             const transportadora = document.getElementById('filtro_transportadora').value;
             const nf = document.getElementById('filtro_nf').value.trim();
 
-            const encontrada = agendamentos.find(i =>
-                i.seller === seller && i.transportadora === transportadora && i.nota_fiscal === nf);
-
-            document.getElementById('resultado-pesquisa').classList.remove('hidden');
+            const achado = agendamentos.find(i => i.seller === seller && i.transportadora === transportadora && String(i.nota_fiscal) === nf);
+            const resEl = document.getElementById('resultado-pesquisa');
+            resEl.classList.remove('hidden');
             document.getElementById('res-nf').textContent = nf;
-            document.getElementById('res-encontrado').classList.toggle('hidden', !encontrada);
-            document.getElementById('res-nao-encontrado').classList.toggle('hidden', !!encontrada);
-            if (encontrada) {
-                document.getElementById('res-etapa').textContent = encontrada.status_etapa;
-                document.getElementById('res-previsao').textContent = formatarData(encontrada.data_agendamento);
-                document.getElementById('res-latam').textContent = encontrada.transportadora !== 'LATAM'
-                    ? 'Não aplicável'
-                    : encontrada.liberado_latam ? 'Liberado para Coleta 🟢' : 'Aguardando Liberação Admin ⏳';
+
+            if (achado) {
+                document.getElementById('res-encontrado').classList.remove('hidden');
+                document.getElementById('res-nao-encontrado').classList.add('hidden');
+                document.getElementById('res-etapa').textContent = achado.status_etapa || '—';
+                document.getElementById('res-previsao').textContent = formatarData(achado.data_agendamento);
+                document.getElementById('res-latam').textContent = achado.liberado_latam ? 'Liberado para Coleta' : 'Pendente / Bloqueado';
+            } else {
+                document.getElementById('res-encontrado').classList.add('hidden');
+                document.getElementById('res-nao-encontrado').classList.remove('hidden');
             }
         }
 
-        async function alternarLiberacaoLatam(id, novoEstado) {
+        async function alternarLatam(id, novoEstado) {
             try {
                 await api(`/api/agendamentos/${id}/latam`, {
                     method: 'PATCH',
@@ -585,19 +591,14 @@
                 });
                 carregarAgendamentos();
             } catch (err) {
-                alert('Erro ao atualizar status: ' + err.message);
+                alert('Erro ao atualizar: ' + err.message);
             }
         }
 
-        // Ao abrir a página, pergunta ao servidor se já existe sessão válida
-        window.onload = async () => {
-            try {
-                currentUser = await api('/api/me');
-                mostrarApp();
-            } catch {
-                mostrarLogin();
-            }
-        };
+        // Verifica sessão ao carregar a página
+        api('/api/me')
+            .then(u => { currentUser = u; mostrarApp(); })
+            .catch(() => mostrarLogin());
     </script>
 </body>
 </html>
