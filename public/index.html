@@ -100,7 +100,47 @@
                 <!-- CONTEÚDO: CONSULTAS -->
                 <div id="conteudo-consultas" class="space-y-6">
 
-                    <!-- Pedidos do marketplace -->
+                    <!-- 1. Consulta de coletas (Movido para ANTES de Pedidos Marketplace) -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <h3 class="text-base font-bold text-slate-800 mb-4">Consultar Coletas</h3>
+                        <form id="consulta-form" onsubmit="consultarOperacao(event)" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Seller</label>
+                                <select id="filtro_seller" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                                    <option value="">Selecione o Seller</option>
+                                    <option value="Brascol - ONESHOP">Brascol - ONESHOP</option>
+                                    <option value="Tramontina">Tramontina</option>
+                                    <option value="Vitrola">Vitrola</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Transportadora</label>
+                                <select id="filtro_transportadora" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                                    <option value="">Selecione a Transportadora</option>
+                                    <option value="LATAM">LATAM</option>
+                                    <option value="Essencial Cargo">Essencial Cargo</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Nota Fiscal (NF)</label>
+                                <input type="text" id="filtro_nf" required placeholder="Número da NF" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                            </div>
+                            <div>
+                                <button type="submit" class="w-full bg-[#003366] hover:bg-sky-800 text-white font-semibold px-4 py-2 rounded-lg text-sm transition shadow-sm">Pesquisar</button>
+                            </div>
+                        </form>
+
+                        <div id="resultado-pesquisa" class="hidden mt-6 p-4 bg-sky-50 border border-sky-200 rounded-xl">
+                            <h4 class="text-sm font-bold text-sky-900 mb-2">Resultado para a NF: <span id="res-nf" class="text-orange-600"></span></h4>
+                            <div id="res-encontrado" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                <div><span class="text-xs text-slate-500 block">Etapa Atual / Último Status:</span> <span id="res-etapa" class="font-bold text-emerald-700"></span></div>
+                                <div id="res-latam-container"><span class="text-xs text-slate-500 block">Status Latam:</span> <span id="res-latam" class="font-semibold text-sky-700"></span></div>
+                            </div>
+                            <p id="res-nao-encontrado" class="hidden text-sm text-slate-600">Nenhuma coleta encontrada com esses dados.</p>
+                        </div>
+                    </div>
+
+                    <!-- 2. Pedidos do marketplace -->
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <div class="flex justify-between items-start mb-4">
                             <div>
@@ -175,48 +215,7 @@
                         </div>
                     </div>
 
-                    <!-- Consulta de coletas -->
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                        <h3 class="text-base font-bold text-slate-800 mb-4">Consultar Coletas</h3>
-                        <form id="consulta-form" onsubmit="consultarOperacao(event)" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Seller</label>
-                                <select id="filtro_seller" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
-                                    <option value="">Selecione o Seller</option>
-                                    <option value="Brascol - ONESHOP">Brascol - ONESHOP</option>
-                                    <option value="Tramontina">Tramontina</option>
-                                    <option value="Vitrola">Vitrola</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Transportadora</label>
-                                <select id="filtro_transportadora" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
-                                    <option value="">Selecione a Transportadora</option>
-                                    <option value="LATAM">LATAM</option>
-                                    <option value="Essencial Cargo">Essencial Cargo</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Nota Fiscal (NF)</label>
-                                <input type="text" id="filtro_nf" required placeholder="Número da NF" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
-                            </div>
-                            <div>
-                                <button type="submit" class="w-full bg-[#003366] hover:bg-sky-800 text-white font-semibold px-4 py-2 rounded-lg text-sm transition shadow-sm">Pesquisar</button>
-                            </div>
-                        </form>
-
-                        <div id="resultado-pesquisa" class="hidden mt-6 p-4 bg-sky-50 border border-sky-200 rounded-xl">
-                            <h4 class="text-sm font-bold text-sky-900 mb-2">Resultado para a NF: <span id="res-nf" class="text-orange-600"></span></h4>
-                            <div id="res-encontrado" class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                                <div><span class="text-xs text-slate-500 block">Etapa Atual:</span> <span id="res-etapa" class="font-bold text-emerald-700"></span></div>
-                                <div><span class="text-xs text-slate-500 block">Previsão:</span> <span id="res-previsao" class="font-semibold text-slate-800"></span></div>
-                                <div><span class="text-xs text-slate-500 block">Status Latam:</span> <span id="res-latam" class="font-semibold text-sky-700"></span></div>
-                            </div>
-                            <p id="res-nao-encontrado" class="hidden text-sm text-slate-600">Nenhuma coleta encontrada com esses dados.</p>
-                        </div>
-                    </div>
-
-                    <!-- Agendamentos -->
+                    <!-- 3. Agendamentos -->
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <h3 class="text-base font-bold text-slate-800 mb-1">Agendamentos</h3>
                         <p class="text-xs text-slate-500 mb-4">Últimos 100 agendamentos registados</p>
@@ -485,7 +484,6 @@
                 const itensRaw = resposta.itens || [];
                 temMais = resposta.tem_mais;
 
-                // BLINDAGEM NO FRONTEND: Garante unicidade absoluta por número de pedido (PEDIDO_COMPRA)
                 const vistos = new Set();
                 const itens = [];
                 for (const item of itensRaw) {
@@ -551,21 +549,51 @@
         async function consultarOperacao(e) {
             e.preventDefault();
             const nf = document.getElementById('filtro_nf').value.trim();
+            const sellerSelecionado = document.getElementById('filtro_seller').value;
             const resBox = document.getElementById('resultado-pesquisa');
             const foundEl = document.getElementById('res-encontrado');
             const notFoundEl = document.getElementById('res-nao-encontrado');
+            const latamContainer = document.getElementById('res-latam-container');
 
             resBox.classList.remove('hidden');
             document.getElementById('res-nf').textContent = nf;
+
+            // Regra: Status LATAM só aparece se o seller selecionado for Brascol
+            const ehBrascol = sellerSelecionado.toUpperCase().includes('BRASCOL');
+            latamContainer.classList.toggle('hidden', !ehBrascol);
 
             try {
                 const tracking = await api('/api/tracking?nf=' + encodeURIComponent(nf));
                 if (tracking && tracking.length > 0) {
                     foundEl.classList.remove('hidden');
                     notFoundEl.classList.add('hidden');
-                    document.getElementById('res-etapa').textContent = tracking[0].status_etapa || 'Em processamento';
-                    document.getElementById('res-previsao').textContent = formatarData(tracking[0].previsao_entrega);
-                    document.getElementById('res-latam').textContent = tracking[0].liberado_latam ? 'Liberado' : 'Aguardando liberação';
+
+                    const t = tracking[0];
+                    let ultimoStatus = 'Em processamento';
+
+                    // Lógica para determinar o último status real com base nas datas preenchidas
+                    if (t.dt_entrega) {
+                        ultimoStatus = 'Entregue ao Cliente';
+                    } else if (t.dt_faturamento) {
+                        ultimoStatus = 'Faturamento CD Concluído';
+                    } else if (t.data_entrega) {
+                        ultimoStatus = 'Entregue no CD';
+                    } else if (t.data_embarque) {
+                        ultimoStatus = 'Embarcado';
+                    } else if (t.emissao_cte) {
+                        ultimoStatus = 'CTE Emitido';
+                    } else if (t.data_coleta) {
+                        ultimoStatus = 'Coleta Realizada';
+                    } else if (t.emissao) {
+                        ultimoStatus = 'Nota Fiscal Emitida pelo Seller';
+                    } else if (t.status_etapa) {
+                        ultimoStatus = t.status_etapa;
+                    }
+
+                    document.getElementById('res-etapa').textContent = ultimoStatus;
+                    if (ehBrascol) {
+                        document.getElementById('res-latam').textContent = t.liberado_latam ? 'Liberado' : 'Aguardando liberação';
+                    }
                 } else {
                     foundEl.classList.add('hidden');
                     notFoundEl.classList.remove('hidden');
