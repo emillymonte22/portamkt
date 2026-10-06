@@ -4,12 +4,15 @@
   "max_concurrent_runs": 1,
   "timeout_seconds": 1800,
   "schedule": {
-    "quartz_cron_expression": "0 0 * * * ?",
+    "quartz_cron_expression": "0 0 7-19 ? * MON-SAT",
     "timezone_id": "America/Manaus",
-    "pause_status": "PAUSED"
+    "pause_status": "UNPAUSED"
   },
   "email_notifications": {
-    "on_failure": ["emillymonte@bemol.com.br", "carlossimoes@bemol.com.br"]
+    "on_failure": [
+      "emillymonte@bemol.com.br",
+      "carlossimoes@bemol.com.br"
+    ]
   },
   "tasks": [
     {
@@ -17,7 +20,8 @@
       "notebook_task": {
         "notebook_path": "/Users/emillymonte@bemol.com.br/portamkt/sync_d1",
         "source": "WORKSPACE"
-      }
+      },
+      "existing_cluster_id": "0811-172632-o2hyyoxq"
     }
   ]
 }
