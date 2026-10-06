@@ -149,9 +149,9 @@
                                         <th class="p-3">DT_PEDIDO</th>
                                         <th class="p-3">NOTA SELLER</th>
                                         <th class="p-3">DT_NF_SELLER</th>
-                                        <th class="p-3">data_coleta</th>
-                                        <th class="p-3">emissao_cte</th>
-                                        <th class="p-3">data_embarque</th>
+                                        <th class="p-3">DATA_COLETA</th>
+                                        <th class="p-3">EMISSAO_CTE</th>
+                                        <th class="p-3">DATA_EMBARQUE</th>
                                         <th class="p-3">ENTREGA CD</th>
                                         <th class="p-3">DT_FATURAMENTO_CD</th>
                                         <th class="p-3">NOTA BEMOL</th>
@@ -216,6 +216,7 @@
                         </div>
                     </div>
 
+                    <!-- Agendamentos -->
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <h3 class="text-base font-bold text-slate-800 mb-1">Agendamentos</h3>
                         <p class="text-xs text-slate-500 mb-4">Últimos 100 agendamentos registados</p>
@@ -314,7 +315,6 @@
         let paginaEntregas = 1;
         const POR_PAGINA = 50;
 
-        // Classes de cada item do menu: [ativo, inativo]
         const MENUS = {
             'consultas':    { titulo: 'Consultas', ativo: 'bg-sky-600 text-white shadow-md', inativo: 'text-sky-200 hover:bg-sky-900/40' },
             'indicadores':  { titulo: 'Indicadores', ativo: 'bg-sky-600 text-white shadow-md', inativo: 'text-sky-200 hover:bg-sky-900/40' },
@@ -323,12 +323,10 @@
             'admin-painel': { titulo: 'Painel Administrativo — Sinalização', ativo: 'bg-amber-600 text-white shadow-md', inativo: 'text-amber-300 hover:bg-amber-900/40' },
         };
 
-        // Escapa texto vindo do banco antes de pôr no HTML
         function esc(v) {
             return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         }
 
-        // "2026-09-24" -> "24/09/2026" sem passar por Date (evita mostrar o dia anterior em UTC-4)
         function formatarData(v) {
             const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v || '');
             return m ? `${m[3]}/${m[2]}/${m[1]}` : '—';
@@ -389,32 +387,42 @@
 
         function aplicarPermissoesPerfil() {
             document.getElementById('user-profile-badge').textContent = `${currentUser.username} (${currentUser.perfil})`;
-            // A tela só esconde menus; quem garante a permissão é a API
             const visivel = {
                 'cd-coleta': ['cd', 'admin'].includes(currentUser.perfil),
                 'admin-painel': currentUser.perfil === 'admin',
             };
             for (const [aba, mostrar] of Object.entries(visivel)) {
                 const el = document.getElementById('menu-' + aba);
-                el.classList.toggle('hidden', !mostrar);
-                el.classList.toggle('flex', mostrar);
+                if (el) {
+                    el.classList.toggle('hidden', !mostrar);
+                    el.classList.toggle('flex', mostrar);
+                }
             }
         }
 
         function mudarAba(aba) {
             for (const [id, cfg] of Object.entries(MENUS)) {
                 const el = document.getElementById('menu-' + id);
+                if (!el) continue;
                 const ativo = id === aba;
                 el.classList.remove(...cfg.ativo.split(' '), ...cfg.inativo.split(' '));
                 el.classList.add(...(ativo ? cfg.ativo : cfg.inativo).split(' '));
             }
             const especificas = ['consultas', 'cd-coleta', 'admin-painel'];
             for (const id of especificas) {
-                document.getElementById('conteudo-' + id).classList.toggle('hidden', id !== aba);
+                const el = document.getElementById('conteudo-' + id);
+                if (el) el.classList.toggle('hidden', id !== aba);
             }
-            document.getElementById('conteudo-generico').classList.toggle('hidden', especificas.includes(aba));
-            document.getElementById('titulo-pagina').textContent = MENUS[aba].titulo;
-            document.getElementById('titulo-generico').textContent = MENUS[aba].titulo;
+            const genEl = document.getElementById('conteudo-generico');
+            if (genEl) genEl.classList.toggle('hidden', especificas.includes(aba));
+            
+            if (MENUS[aba]) {
+                document.getElementById('titulo-pagina').textContent = MENUS[aba].titulo;
+                document.getElementById('titulo-generico').textContent = MENUS[aba].titulo;
+            }
+
+            if (aba === 'cd-coleta') carregarCdLatam();
+            if (aba === 'admin-painel') carregarAdminSinalizacao();
         }
 
         async function carregarDados() {
@@ -423,8 +431,6 @@
             buscarEntregas();
             carregarAgendamentos();
         }
-
-        // ---------- Pedidos marketplace ----------
 
         async function carregarFiltrosEntregas() {
             try {
@@ -502,15 +508,12 @@
                 tbody.innerHTML = `<tr><td colspan="14" class="p-4 text-center text-red-500">${esc(err.message)}</td></tr>`;
             }
 
-            // A API não conta o total (economiza leituras no D1); mostra só a faixa da página atual
             const inicio = qtd ? (paginaEntregas - 1) * POR_PAGINA + 1 : 0;
             document.getElementById('entregas-total').textContent =
                 qtd ? `Pedidos ${inicio}–${inicio + qtd - 1} · página ${paginaEntregas}` : '';
             document.getElementById('pag-anterior').disabled = paginaEntregas <= 1;
             document.getElementById('pag-proxima').disabled = !temMais;
         }
-
-        // ---------- Agendamentos ----------
 
         async function carregarAgendamentos() {
             try {
@@ -528,80 +531,109 @@
                         <td class="p-3">${esc(item.transportadora)}</td>
                         <td class="p-3 font-semibold text-[#003366]">${esc(item.nota_fiscal)}</td>
                         <td class="p-3">${esc(item.motorista)}</td>
-                        <td class="p-3">${esc(item.veiculo_placa)}</td>
-                        <td class="p-3 font-medium text-slate-700">${formatarData(item.data_agendamento)}</td>
-                        <td class="p-3"><span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-medium">${esc(item.status_etapa)}</span></td>
-                    </tr>`).join('');
-
-            const latamLiberados = agendamentos.filter(i => i.transportadora === 'LATAM' && i.liberado_latam);
-            document.getElementById('tabela-cd-latam').innerHTML = latamLiberados.length === 0
-                ? '<tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhuma carga liberada no momento.</td></tr>'
-                : latamLiberados.map(item => `
-                    <tr class="hover:bg-slate-50">
-                        <td class="p-3 font-medium text-slate-900">${esc(item.seller)}</td>
-                        <td class="p-3 font-semibold text-[#003366]">${esc(item.nota_fiscal)}</td>
-                        <td class="p-3">${esc(item.motorista)}</td>
-                        <td class="p-3">${esc(item.veiculo_placa)}</td>
+                        <td class="p-3 font-mono">${esc(item.veiculo_placa)}</td>
                         <td class="p-3">${formatarData(item.data_agendamento)}</td>
-                        <td class="p-3"><span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-bold">LIBERADA LATAM</span></td>
-                    </tr>`).join('');
-
-            document.getElementById('tabela-admin-sinalizacao').innerHTML = agendamentos.length === 0
-                ? '<tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhum agendamento para gerir.</td></tr>'
-                : agendamentos.map(item => `
-                    <tr class="hover:bg-slate-50">
-                        <td class="p-3 font-medium text-slate-900">${esc(item.seller)}</td>
-                        <td class="p-3">${esc(item.transportadora)}</td>
-                        <td class="p-3 font-semibold text-[#003366]">${esc(item.nota_fiscal)}</td>
-                        <td class="p-3">${formatarData(item.data_agendamento)}</td>
-                        <td class="p-3"><span class="${item.liberado_latam ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'} text-xs px-2.5 py-1 rounded-full font-medium">${item.liberado_latam ? 'Liberada para Coleta' : 'Bloqueada'}</span></td>
-                        <td class="p-3 text-center">
-                            <button onclick="alternarLatam(${item.id}, ${!item.liberado_latam})" class="px-3 py-1.5 rounded-lg text-xs font-semibold ${item.liberado_latam ? 'bg-red-100 text-red-700 hover:bg-red-200' : 'bg-emerald-600 text-white hover:bg-emerald-700'} transition">
-                                ${item.liberado_latam ? 'Revogar Coleta' : 'Liberar Coleta'}
-                            </button>
-                        </td>
+                        <td class="p-3"><span class="bg-sky-100 text-sky-800 text-xs px-2.5 py-1 rounded-full font-medium">${esc(item.status_etapa)}</span></td>
                     </tr>`).join('');
         }
 
         async function consultarOperacao(e) {
             e.preventDefault();
-            const seller = document.getElementById('filtro_seller').value;
-            const transportadora = document.getElementById('filtro_transportadora').value;
             const nf = document.getElementById('filtro_nf').value.trim();
+            const resBox = document.getElementById('resultado-pesquisa');
+            const foundEl = document.getElementById('res-encontrado');
+            const notFoundEl = document.getElementById('res-nao-encontrado');
 
-            const achado = agendamentos.find(i => i.seller === seller && i.transportadora === transportadora && String(i.nota_fiscal) === nf);
-            const resEl = document.getElementById('resultado-pesquisa');
-            resEl.classList.remove('hidden');
+            resBox.classList.remove('hidden');
             document.getElementById('res-nf').textContent = nf;
 
-            if (achado) {
-                document.getElementById('res-encontrado').classList.remove('hidden');
-                document.getElementById('res-nao-encontrado').classList.add('hidden');
-                document.getElementById('res-etapa').textContent = achado.status_etapa || '—';
-                document.getElementById('res-previsao').textContent = formatarData(achado.data_agendamento);
-                document.getElementById('res-latam').textContent = achado.liberado_latam ? 'Liberado para Coleta' : 'Pendente / Bloqueado';
-            } else {
-                document.getElementById('res-encontrado').classList.add('hidden');
-                document.getElementById('res-nao-encontrado').classList.remove('hidden');
+            try {
+                const tracking = await api('/api/tracking?nf=' + encodeURIComponent(nf));
+                if (tracking && tracking.length > 0) {
+                    foundEl.classList.remove('hidden');
+                    notFoundEl.classList.add('hidden');
+                    document.getElementById('res-etapa').textContent = tracking[0].status_etapa || 'Em processamento';
+                    document.getElementById('res-previsao').textContent = formatarData(tracking[0].previsao_entrega);
+                    document.getElementById('res-latam').textContent = tracking[0].liberado_latam ? 'Liberado' : 'Aguardando liberação';
+                } else {
+                    foundEl.classList.add('hidden');
+                    notFoundEl.classList.remove('hidden');
+                }
+            } catch (err) {
+                foundEl.classList.add('hidden');
+                notFoundEl.classList.remove('hidden');
+                notFoundEl.textContent = err.message;
             }
         }
 
-        async function alternarLatam(id, novoEstado) {
+        async function carregarCdLatam() {
+            const tbody = document.getElementById('tabela-cd-latam');
+            try {
+                const filtrados = agendamentos.filter(a => a.transportadora?.toUpperCase() === 'LATAM' && a.liberado_latam === 1);
+                tbody.innerHTML = filtrados.length === 0
+                    ? '<tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhuma carga LATAM liberada no momento.</td></tr>'
+                    : filtrados.map(item => `
+                        <tr class="hover:bg-slate-50">
+                            <td class="p-3 font-medium text-slate-900">${esc(item.seller)}</td>
+                            <td class="p-3 font-semibold text-[#003366]">${esc(item.nota_fiscal)}</td>
+                            <td class="p-3">${esc(item.motorista)}</td>
+                            <td class="p-3 font-mono">${esc(item.veiculo_placa)}</td>
+                            <td class="p-3">${formatarData(item.data_agendamento)}</td>
+                            <td class="p-3"><span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">Liberado para Coleta</span></td>
+                        </tr>`).join('');
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-red-500">${esc(err.message)}</td></tr>`;
+            }
+        }
+
+        async function carregarAdminSinalizacao() {
+            const tbody = document.getElementById('tabela-admin-sinalizacao');
+            try {
+                const latamItens = agendamentos.filter(a => a.transportadora?.toUpperCase() === 'LATAM');
+                tbody.innerHTML = latamItens.length === 0
+                    ? '<tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhum agendamento LATAM encontrado.</td></tr>'
+                    : latamItens.map(item => `
+                        <tr class="hover:bg-slate-50">
+                            <td class="p-3 font-medium text-slate-900">${esc(item.seller)}</td>
+                            <td class="p-3">${esc(item.transportadora)}</td>
+                            <td class="p-3 font-semibold text-[#003366]">${esc(item.nota_fiscal)}</td>
+                            <td class="p-3">${formatarData(item.data_agendamento)}</td>
+                            <td class="p-3">
+                                <span class="${item.liberado_latam ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'} text-xs px-2.5 py-1 rounded-full font-medium">
+                                    ${item.liberado_latam ? 'Liberado' : 'Bloqueado'}
+                                </span>
+                            </td>
+                            <td class="p-3 text-center">
+                                <button onclick="alternarLiberacao(${item.id}, ${!item.liberado_latam})" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-white ${item.liberado_latam ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'} transition">
+                                    ${item.liberado_latam ? 'Bloquear' : 'Liberar Carga'}
+                                </button>
+                            </td>
+                        </tr>`).join('');
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-red-500">${esc(err.message)}</td></tr>`;
+            }
+        }
+
+        async function alternarLiberacao(id, novoEstado) {
             try {
                 await api(`/api/agendamentos/${id}/latam`, {
                     method: 'PATCH',
                     body: JSON.stringify({ liberado_latam: novoEstado }),
                 });
-                carregarAgendamentos();
+                await carregarAgendamentos();
+                carregarAdminSinalizacao();
             } catch (err) {
-                alert('Erro ao atualizar: ' + err.message);
+                alert('Erro ao atualizar liberação: ' + err.message);
             }
         }
 
-        // Verifica sessão ao carregar a página
-        api('/api/me')
-            .then(u => { currentUser = u; mostrarApp(); })
-            .catch(() => mostrarLogin());
+        // Checar sessão ao carregar a página
+        api('/api/me').then(user => {
+            currentUser = user;
+            mostrarApp();
+        }).catch(() => {
+            mostrarLogin();
+        });
     </script>
 </body>
 </html>
