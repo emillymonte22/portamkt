@@ -482,7 +482,7 @@
             let qtd = 0;
             try {
                 const resposta = await api('/api/entregas?' + params);
-                const itens = resposta.itens;
+                const itens = resposta.itens || [];
                 temMais = resposta.tem_mais;
                 qtd = itens.length;
                 tbody.innerHTML = itens.length === 0
