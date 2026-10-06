@@ -156,15 +156,24 @@ async function listarAgendamentos(env) {
 
 async function criarAgendamento(request, env) {
   const b = await request.json().catch(() => ({}));
-  const obrigatorios = ['seller', 'transportadora', 'motorista', 'veiculo_placa', 'nota_fiscal', 'tipo_carga', 'data_agendamento'];
+  const obrigatorios = ['seller', 'transportadora', 'motorista', 'veiculo_placa', 'nota_fiscal', 'data_agendamento'];
   if (obrigatorios.some(c => typeof b[c] !== 'string' || !b[c].trim())) {
     return erro(400, `Campos obrigatórios: ${obrigatorios.join(', ')}`);
   }
   await env.DB.prepare(
-    `INSERT INTO agendamentos (seller, transportadora, motorista, veiculo_placa, nota_fiscal, tipo_carga, data_agendamento, status_etapa)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(b.seller, b.transportadora, b.motorista, b.veiculo_placa, b.nota_fiscal, b.tipo_carga, b.data_agendamento,
-    b.status_etapa || 'Emissão do Pedido').run();
+    `INSERT INTO agendamentos (seller, transportadora, motorista, veiculo_placa, nota_fiscal, cte, tipo_carga, data_agendamento, status_etapa)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    b.seller, 
+    b.transportadora, 
+    b.motorista, 
+    b.veiculo_placa, 
+    b.nota_fiscal, 
+    b.cte || '', 
+    b.tipo_carga || 'Coleta LATAM', 
+    b.data_agendamento,
+    b.status_etapa || 'Emissão do Pedido'
+  ).run();
   return Response.json({ success: true });
 }
 
