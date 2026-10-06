@@ -1,0 +1,23 @@
+{
+  "name": "portamkt - sync Databricks -> D1",
+  "description": "Copia f_tracking_aereo e dados_entregas_mkt_manifest_01 para o D1 do portal portamkt (Cloudflare). Codigo: databricks/sync_d1.py",
+  "max_concurrent_runs": 1,
+  "timeout_seconds": 1800,
+  "schedule": {
+    "quartz_cron_expression": "0 0 * * * ?",
+    "timezone_id": "America/Manaus",
+    "pause_status": "PAUSED"
+  },
+  "email_notifications": {
+    "on_failure": ["emillymonte@bemol.com.br", "carlossimoes@bemol.com.br"]
+  },
+  "tasks": [
+    {
+      "task_key": "sync_d1",
+      "notebook_task": {
+        "notebook_path": "/Users/emillymonte@bemol.com.br/portamkt/sync_d1",
+        "source": "WORKSPACE"
+      }
+    }
+  ]
+}

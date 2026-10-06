@@ -1,8 +1,9 @@
-name = "seu-portal-worker"
-main = "src/index.js"
+# Cloudflare Pages: a tela fica em public/, a API em functions/
+name = "portamkt"
+pages_build_output_dir = "public"
 compatibility_date = "2026-03-25"
 
 [[d1_databases]]
-binding = "DB" 
+binding = "DB"
 database_name = "portamkt-db"
 database_id = "46af9aee-add1-421f-90c6-a87f847fca86"
