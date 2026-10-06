@@ -73,7 +73,6 @@ async function login(request, env) {
   if (user && user.senha.startsWith('pbkdf2$')) {
     valido = await verificarSenha(senha, user.senha);
   } else if (user) {
-    // Senha ainda em texto puro (cadastro antigo): confere e já converte para hash
     valido = iguais(senha, user.senha);
     if (valido) {
       await env.DB.prepare('UPDATE usuarios SET senha = ? WHERE id = ?')
@@ -131,7 +130,6 @@ async function verificarSenha(senha, armazenado) {
   return iguais(await gerarHashSenha(senha, deBase64Url(sal), Number(iteracoes)), armazenado);
 }
 
-// Comparação em tempo constante, para não vazar informação pelo tempo de resposta
 function iguais(a, b) {
   const x = new TextEncoder().encode(a);
   const y = new TextEncoder().encode(b);
@@ -179,7 +177,7 @@ async function alterarLiberacaoLatam(request, env, id) {
   return Response.json({ success: true });
 }
 
-// ---------- Dados do Databricks (copiados pelo Job databricks/sync_d1.py) ----------
+// ---------- Dados do Databricks ----------
 
 async function listarEntregas(env, p) {
   const filtros = [];
@@ -197,17 +195,15 @@ async function listarEntregas(env, p) {
     valores.push(status);
   }
 
-  const de = p.get('de');
-  if (de) {
-    filtros.push('dt_pedido >= ?');
-    valores.push(de);
-  }
+  // Filtro de data inicial (Se o usuário não informar, limita por padrão a partir de 01/01/2026)
+  const de = p.get('de') || '2026-01-01';
+  filtros.push('dt_pedido >= ?');
+  valores.push(de);
 
-  const ate = p.get('ate');
-  if (ate) {
-    filtros.push('dt_pedido <= ?');
-    valores.push(ate);
-  }
+  // Filtro de data final (Se o usuário não informar, limita até 31/12/2026)
+  const ate = p.get('ate') || '2026-12-31';
+  filtros.push('dt_pedido <= ?');
+  valores.push(ate);
 
   const busca = (p.get('busca') || '').trim();
   if (busca) {
