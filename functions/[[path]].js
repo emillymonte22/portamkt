@@ -156,23 +156,27 @@ async function listarAgendamentos(env) {
 
 async function criarAgendamento(request, env) {
   const b = await request.json().catch(() => ({}));
-  const obrigatorios = ['seller', 'transportadora', 'motorista', 'veiculo_placa', 'nota_fiscal', 'data_agendamento'];
+  const obrigatorios = ['seller', 'transportadora', 'nota_fiscal'];
   if (obrigatorios.some(c => typeof b[c] !== 'string' || !b[c].trim())) {
     return erro(400, `Campos obrigatórios: ${obrigatorios.join(', ')}`);
   }
+  
+  // Se for LATAM, por padrão já nasce liberado para coleta conforme solicitado
+  const liberadoLatam = (b.transportadora || '').toUpperCase() === 'LATAM' ? 1 : 0;
+
   await env.DB.prepare(
-    `INSERT INTO agendamentos (seller, transportadora, motorista, veiculo_placa, nota_fiscal, cte, tipo_carga, data_agendamento, status_etapa)
+    `INSERT INTO agendamentos (seller, transportadora, nota_fiscal, cte, data_coleta, data_cte, entrega_cd, status_etapa, liberado_latam)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     b.seller, 
     b.transportadora, 
-    b.motorista, 
-    b.veiculo_placa, 
     b.nota_fiscal, 
     b.cte || '', 
-    b.tipo_carga || 'Coleta LATAM', 
-    b.data_agendamento,
-    b.status_etapa || 'Emissão do Pedido'
+    b.data_coleta || null, 
+    b.data_cte || null, 
+    b.entrega_cd || null,
+    b.status_etapa || 'Emissão do Pedido',
+    liberadoLatam
   ).run();
   return Response.json({ success: true });
 }
