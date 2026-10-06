@@ -212,21 +212,20 @@ async function listarEntregas(env, p) {
   }
 
   if (busca) {
-    if (/^\d{1,18}$/.test(busca)) {
+    if (/^\d{1,20}$/.test(busca)) {
       const n = Number(busca);
       const nfStr = nfTracking(busca);
-      filtros.push('(nf = ? OR pedido = ? OR ordem = ? OR nota_fiscal_explode = ?)');
-      valores.push(n, n, n, nfStr);
+      filtros.push('(nf = ? OR pedido = ? OR ordem = ? OR nota_fiscal_explode = ? OR CAST(pedido AS TEXT) = ? OR CAST(ordem AS TEXT) = ?)');
+      valores.push(n, n, n, nfStr, busca, busca);
     } else {
-      return erro(400, 'Busque por número de NF, pedido ou ordem');
+      filtros.push('(CAST(pedido AS TEXT) LIKE ? OR CAST(ordem AS TEXT) LIKE ? OR CAST(nf AS TEXT) LIKE ?)');
+      valores.push(`%${busca}%`, `%${busca}%`, `%${busca}%`);
     }
   }
 
   const where = filtros.length ? `WHERE ${filtros.join(' AND ')}` : '';
   const pagina = Math.max(1, parseInt(p.get('pagina'), 10) || 1);
 
-  // Sem COUNT(*): contar lia a tabela inteira a cada página (o D1 grátis limita linhas lidas por dia).
-  // Busca uma linha a mais só para saber se existe próxima página.
   const { results } = await env.DB.prepare(
     `SELECT * FROM entregas_mkt ${where} ORDER BY dt_pedido DESC, pedido DESC LIMIT ? OFFSET ?`
   ).bind(...valores, ITENS_POR_PAGINA + 1, (pagina - 1) * ITENS_POR_PAGINA).all();
@@ -237,7 +236,6 @@ async function listarEntregas(env, p) {
 }
 
 // As listas dos filtros só mudam quando o Job roda (1x por dia), então ficam em memória por 30 min
-// em vez de ler a tabela inteira a cada abertura da tela.
 let cacheFiltros = null;
 const CACHE_FILTROS_MS = 30 * 60 * 1000;
 
