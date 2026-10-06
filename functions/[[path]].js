@@ -195,17 +195,22 @@ async function listarEntregas(env, p) {
     valores.push(status);
   }
 
-  // Filtro de data inicial (Se o usuário não informar, limita por padrão a partir de 01/01/2026)
-  const de = p.get('de') || '2026-01-01';
-  filtros.push('dt_pedido >= ?');
-  valores.push(de);
-
-  // Filtro de data final (Se o usuário não informar, limita até 31/12/2026)
-  const ate = p.get('ate') || '2026-12-31';
-  filtros.push('dt_pedido <= ?');
-  valores.push(ate);
-
   const busca = (p.get('busca') || '').trim();
+
+  // Sem data informada, mostra só o ano corrente; na busca por número procura em todo o histórico
+  const ano = new Date().getFullYear();
+  const de = p.get('de') || (busca ? '' : `${ano}-01-01`);
+  if (de) {
+    filtros.push('dt_pedido >= ?');
+    valores.push(de);
+  }
+
+  const ate = p.get('ate') || (busca ? '' : `${ano}-12-31`);
+  if (ate) {
+    filtros.push('dt_pedido <= ?');
+    valores.push(ate);
+  }
+
   if (busca) {
     if (/^\d{1,18}$/.test(busca)) {
       const n = Number(busca);
@@ -220,22 +225,34 @@ async function listarEntregas(env, p) {
   const where = filtros.length ? `WHERE ${filtros.join(' AND ')}` : '';
   const pagina = Math.max(1, parseInt(p.get('pagina'), 10) || 1);
 
-  const totalRes = await env.DB.prepare(`SELECT COUNT(*) AS n FROM entregas_mkt ${where}`).bind(...valores).first('n');
-  const total = totalRes || 0;
-
+  // Sem COUNT(*): contar lia a tabela inteira a cada página (o D1 grátis limita linhas lidas por dia).
+  // Busca uma linha a mais só para saber se existe próxima página.
   const { results } = await env.DB.prepare(
     `SELECT * FROM entregas_mkt ${where} ORDER BY dt_pedido DESC, pedido DESC LIMIT ? OFFSET ?`
-  ).bind(...valores, ITENS_POR_PAGINA, (pagina - 1) * ITENS_POR_PAGINA).all();
+  ).bind(...valores, ITENS_POR_PAGINA + 1, (pagina - 1) * ITENS_POR_PAGINA).all();
 
-  return Response.json({ itens: results || [], total, pagina, por_pagina: ITENS_POR_PAGINA });
+  const itens = results || [];
+  const tem_mais = itens.length > ITENS_POR_PAGINA;
+  return Response.json({ itens: itens.slice(0, ITENS_POR_PAGINA), tem_mais, pagina, por_pagina: ITENS_POR_PAGINA });
 }
 
+// As listas dos filtros só mudam quando o Job roda (1x por dia), então ficam em memória por 30 min
+// em vez de ler a tabela inteira a cada abertura da tela.
+let cacheFiltros = null;
+const CACHE_FILTROS_MS = 30 * 60 * 1000;
+
 async function filtrosEntregas(env) {
-  const [sellers, status] = await env.DB.batch([
-    env.DB.prepare('SELECT DISTINCT n_fornecedor AS v FROM entregas_mkt WHERE n_fornecedor IS NOT NULL ORDER BY 1'),
-    env.DB.prepare('SELECT DISTINCT no_prazo AS v FROM entregas_mkt WHERE no_prazo IS NOT NULL ORDER BY 1'),
-  ]);
-  return Response.json({ sellers: sellers.results.map(r => r.v), status: status.results.map(r => r.v) });
+  if (!cacheFiltros || Date.now() - cacheFiltros.em > CACHE_FILTROS_MS) {
+    const [sellers, status] = await env.DB.batch([
+      env.DB.prepare('SELECT DISTINCT n_fornecedor AS v FROM entregas_mkt WHERE n_fornecedor IS NOT NULL ORDER BY 1'),
+      env.DB.prepare('SELECT DISTINCT no_prazo AS v FROM entregas_mkt WHERE no_prazo IS NOT NULL ORDER BY 1'),
+    ]);
+    cacheFiltros = {
+      em: Date.now(),
+      dados: { sellers: sellers.results.map(r => r.v), status: status.results.map(r => r.v) },
+    };
+  }
+  return Response.json(cacheFiltros.dados);
 }
 
 async function listarTracking(env, p) {

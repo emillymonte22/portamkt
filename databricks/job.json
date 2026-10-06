@@ -4,7 +4,7 @@
   "max_concurrent_runs": 1,
   "timeout_seconds": 1800,
   "schedule": {
-    "quartz_cron_expression": "0 0 7-19 ? * MON-SAT",
+    "quartz_cron_expression": "0 0 8 * * ?",
     "timezone_id": "America/Manaus",
     "pause_status": "UNPAUSED"
   },

@@ -18,7 +18,7 @@ de cargas para o CD de Manaus.
 
 ```
 Databricks (2 tabelas)
-   │  Job "portamkt - sync Databricks -> D1" (de hora em hora, 7h–19h, seg–sáb, fuso America/Manaus)
+   │  Job "portamkt - sync Databricks -> D1" (1 vez por dia, às 8h, fuso America/Manaus)
    ▼
 Cloudflare D1 (banco SQLite "portamkt-db")
    ▲
@@ -75,7 +75,7 @@ Login com usuário e senha (tabela `usuarios`). Três perfis:
 | `GET /api/agendamentos` | logado | últimos 100 agendamentos |
 | `POST /api/agendamentos` | admin, cd | cria agendamento |
 | `PATCH /api/agendamentos/:id/latam` `{liberado_latam: true/false}` | admin | libera/revoga coleta LATAM |
-| `GET /api/entregas?seller=&status=&de=&ate=&busca=&pagina=` | logado | `{itens, total, pagina, por_pagina}` (50 por página). `busca` = número de NF, pedido ou ordem |
+| `GET /api/entregas?seller=&status=&de=&ate=&busca=&pagina=` | logado | `{itens, tem_mais, pagina, por_pagina}` (50 por página). Sem data, mostra o ano corrente; `busca` (NF, pedido ou ordem) procura em todo o histórico. **Não retorna total** (ver regra 11) |
 | `GET /api/entregas/filtros` | logado | `{sellers: [...], status: [...]}` para preencher os selects |
 | `GET /api/tracking?nf=` | logado | itens da NF na tabela de tracking aéreo |
 | `GET /api/sync-status` | logado | data/hora da última sincronização com o Databricks |
@@ -106,6 +106,7 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 7. **Não colocar senhas, tokens ou secrets em nenhum arquivo** do repositório.
 8. **Não alterar as tabelas `entregas_mkt`, `tracking_aereo` e `sync_log` pelo portal** — elas são sobrescritas pelo Job.
 9. Mudança de estrutura no banco: criar um arquivo novo `d1/migracao_00X_<descricao>.sql`, aplicar com o comando da seção 9 e atualizar `d1/schema.sql`.
+11. **Limites do plano grátis do D1:** 5 milhões de linhas lidas e 100 mil gravadas por dia. Não usar `COUNT(*)` nem consultas sem `WHERE`/`LIMIT` na tabela inteira a cada abertura de tela; não criar índices sem necessidade (cada índice multiplica as gravações do Job).
 10. Manter o visual: Tailwind, azul Bemol `#003366` / `#002B49`, cartões `bg-white rounded-2xl shadow-sm border border-slate-200`.
 
 ## 9. Como publicar e testar
@@ -124,7 +125,7 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 ## 10. Job do Databricks
 
 - Nome: `portamkt - sync Databricks -> D1` (ID `1025737974527673`), notebook em `/Users/emillymonte@bemol.com.br/portamkt/sync_d1`.
-- Roda no cluster compartilhado **DATA-COMERCIAL-01**, de hora em hora das 7h às 19h, seg–sáb. Falhas mandam e-mail.
+- Roda no cluster compartilhado **DATA-COMERCIAL-01**, 1 vez por dia, às 8h (as tabelas de origem só mudam 1x por dia). Falhas mandam e-mail.
 - Lê as duas tabelas sem linhas repetidas, calcula um hash por linha e só envia ao D1 o que mudou (insere novas, apaga as que sumiram). Tem trava: se a origem vier com menos da metade das linhas, aborta sem apagar nada.
 - Usa o secret `portamkt/cloudflare_token` do Databricks (API Token do Cloudflare com permissão D1:Edit).
 - Alterou `databricks/sync_d1.py`? É preciso reenviar o notebook ao Databricks:

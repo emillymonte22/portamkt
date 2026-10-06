@@ -67,8 +67,6 @@ CREATE TABLE IF NOT EXISTS tracking_aereo (
   volume               TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_tracking_nf     ON tracking_aereo (nota_fiscal_explode);
-CREATE INDEX IF NOT EXISTS idx_tracking_chave  ON tracking_aereo (chave_nf);
-CREATE INDEX IF NOT EXISTS idx_tracking_forn   ON tracking_aereo (nome_forn);
 
 -- Origem: bemolonline.bol.dados_entregas_mkt_manifest_01 (pedido do marketplace, ponta a ponta)
 CREATE TABLE IF NOT EXISTS entregas_mkt (
@@ -106,7 +104,7 @@ CREATE INDEX IF NOT EXISTS idx_entregas_pedido ON entregas_mkt (pedido);
 CREATE INDEX IF NOT EXISTS idx_entregas_ordem  ON entregas_mkt (ordem);
 CREATE INDEX IF NOT EXISTS idx_entregas_nf     ON entregas_mkt (nf);
 CREATE INDEX IF NOT EXISTS idx_entregas_nf_exp ON entregas_mkt (nota_fiscal_explode);
-CREATE INDEX IF NOT EXISTS idx_entregas_prazo  ON entregas_mkt (no_prazo);
+CREATE INDEX IF NOT EXISTS idx_entregas_data   ON entregas_mkt (dt_pedido DESC, pedido DESC);
 
 -- Uma linha por execução do Job, para o portal mostrar "atualizado em ..."
 CREATE TABLE IF NOT EXISTS sync_log (

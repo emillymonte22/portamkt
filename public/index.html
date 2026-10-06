@@ -312,7 +312,6 @@
         let currentUser = null;
         let agendamentos = [];
         let paginaEntregas = 1;
-        let totalEntregas = 0;
         const POR_PAGINA = 50;
 
         // Classes de cada item do menu: [ativo, inativo]
@@ -473,9 +472,13 @@
                 if (v) params.set(param, v);
             }
 
+            let temMais = false;
+            let qtd = 0;
             try {
-                const { itens, total } = await api('/api/entregas?' + params);
-                totalEntregas = total;
+                const resposta = await api('/api/entregas?' + params);
+                const itens = resposta.itens;
+                temMais = resposta.tem_mais;
+                qtd = itens.length;
                 tbody.innerHTML = itens.length === 0
                     ? '<tr><td colspan="14" class="p-4 text-center text-slate-400">Nenhum pedido encontrado.</td></tr>'
                     : itens.map(i => `
@@ -489,22 +492,22 @@
                             <td class="p-3">${formatarData(i.emissao_cte)}</td>
                             <td class="p-3">${formatarData(i.data_embarque)}</td>
                             <td class="p-3">${formatarData(i.data_entrega)}</td>
-                            <td class="p-3">${formatarData(i.DT_FATURAMENTO)}</td>
+                            <td class="p-3">${formatarData(i.dt_faturamento)}</td>
                             <td class="p-3 font-semibold text-[#003366]">${esc(i.nf || '—')}</td>
-                            <td class="p-3">${formatarData(i.DT_ENTREGA)}</td>
+                            <td class="p-3">${formatarData(i.dt_entrega)}</td>
                             <td class="p-3">${esc([i.bairro, i.cidade].filter(Boolean).join(', '))}${i.uf ? ' - ' + esc(i.uf) : ''}</td>
                             <td class="p-3"><span class="${corStatus(i.no_prazo)} text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap">${esc(i.no_prazo || '—')}</span></td>
                         </tr>`).join('');
             } catch (err) {
                 tbody.innerHTML = `<tr><td colspan="14" class="p-4 text-center text-red-500">${esc(err.message)}</td></tr>`;
-                totalEntregas = 0;
             }
 
-            const paginas = Math.max(1, Math.ceil(totalEntregas / POR_PAGINA));
+            // A API não conta o total (economiza leituras no D1); mostra só a faixa da página atual
+            const inicio = qtd ? (paginaEntregas - 1) * POR_PAGINA + 1 : 0;
             document.getElementById('entregas-total').textContent =
-                `${totalEntregas.toLocaleString('pt-BR')} pedidos · página ${paginaEntregas} de ${paginas}`;
+                qtd ? `Pedidos ${inicio}–${inicio + qtd - 1} · página ${paginaEntregas}` : '';
             document.getElementById('pag-anterior').disabled = paginaEntregas <= 1;
-            document.getElementById('pag-proxima').disabled = paginaEntregas >= paginas;
+            document.getElementById('pag-proxima').disabled = !temMais;
         }
 
         // ---------- Agendamentos ----------
