@@ -194,7 +194,7 @@ async function listarEntregas(env, p) {
   if (/^\d{1,18}$/.test(busca)) {
     // Um número pode ser NF, pedido ou ordem; a NF do tracking tem 10 dígitos com zeros à esquerda
     const n = Number(busca);
-    filtros.push('(nf = ? OR pedido = ? OR ordem = ? OR nota_fiscal_explode = ?)');
+    filtrar('(nf = ? OR pedido = ? OR ordem = ? OR nota_fiscal_explode = ?)');
     valores.push(n, n, n, nfTracking(busca));
   } else if (busca) {
     return erro(400, 'Busque por número de NF, pedido ou ordem');
@@ -220,25 +220,4 @@ async function filtrosEntregas(env) {
 }
 
 async function listarTracking(env, p) {
-  const nf = (p.get('nf') || '').trim();
-  if (!/^\d{1,10}$/.test(nf)) return erro(400, 'Informe a NF (só números)');
-  const { results } = await env.DB.prepare(
-    'SELECT * FROM tracking_aereo WHERE nota_fiscal_explode = ? ORDER BY descricao_material'
-  ).bind(nfTracking(nf)).all();
-  return Response.json(results);
-}
-
-function nfTracking(nf) {
-  return String(nf).replace(/^0+/, '').padStart(10, '0');
-}
-
-async function statusSync(env) {
-  const { results } = await env.DB.prepare(
-    'SELECT tabela, MAX(executado_em) AS executado_em FROM sync_log GROUP BY tabela'
-  ).all();
-  return Response.json(results);
-}
-
-function erro(status, mensagem) {
-  return Response.json({ success: false, error: mensagem }, { status });
-}
+  const nf = (p.
