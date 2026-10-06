@@ -1,8 +1,10 @@
 # Contexto do projeto para IAs (ChatGPT, Gemini, Copilot, Claude…)
 
-> **Como usar:** antes de pedir qualquer alteração a uma IA, cole este arquivo inteiro no início da conversa
-> e, junto, o arquivo que você quer mudar (normalmente `public/index.html` ou `functions/[[path]].js`).
-> Peça para a IA devolver o arquivo **completo** já alterado e respeitar as regras da seção "Regras obrigatórias".
+> **Como usar:**
+> - **Claude Code:** abra o Claude na pasta do projeto clonado do GitHub. Ele lê o `CLAUDE.md` sozinho, que carrega este arquivo.
+> - **IA de chat (Gemini, ChatGPT…):** cole este arquivo inteiro no início da conversa e, junto, o arquivo que vai mudar
+>   (normalmente `public/index.html`). Peça o arquivo **completo** de volta e confira se ele termina certo antes de colar no GitHub.
+> - Em qualquer caso, respeite as "Regras obrigatórias" (seção 8). O histórico do que já foi feito está na seção 14.
 
 ## 1. O que é
 
@@ -40,10 +42,11 @@ Cloudflare Pages (site estático)  →  public/index.html      (tela)
 | `functions/[[path]].js` | A API: login, sessão, permissões e consultas ao banco. |
 | `wrangler.toml` | Configuração do Cloudflare (nome do projeto, pasta `public`, ligação com o D1). Não mexer sem necessidade. |
 | `d1/schema.sql` | Estrutura de todas as tabelas do banco. |
-| `d1/migracao_*.sql` | Alterações de banco já aplicadas (histórico). |
+| `d1/migracao_*.sql` | Alterações de banco, em ordem. Ver na seção 11 quais ainda faltam aplicar. |
 | `databricks/sync_d1.py` | Notebook do Job que copia os dados do Databricks para o D1. |
 | `databricks/job.json` | Configuração do Job no Databricks (cluster, horário, e-mails). |
 | `CONTEXTO_IA.md` | Este arquivo. |
+| `CLAUDE.md` | Instruções para o Claude Code (carrega este arquivo automaticamente). |
 
 Arquivos fora de `public/` **não** ficam acessíveis pela internet.
 
@@ -115,15 +118,17 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 ## 9. Como publicar e testar
 
 - **Publicar:** commit + push na `main` → o Cloudflare publica sozinho. Acompanhar em dash.cloudflare.com → Workers & Pages → portamkt.
-- **Testar no computador** (precisa de Node.js):
+- **Testar no computador** (precisa de Node.js). Use a versão fixa `wrangler@4.147.0`: no Windows, o `npx` às vezes trava (erro `EBUSY`) ao baixar versão nova.
   ```
-  npx wrangler login
-  npx wrangler d1 execute portamkt-db --local --file d1/schema.sql
+  npx -y wrangler@4.147.0 login
+  npx -y wrangler@4.147.0 d1 execute portamkt-db --local --file d1/schema.sql
   echo SESSION_SECRET=qualquer-texto-longo-para-teste > .dev.vars
-  npx wrangler pages dev
+  npx -y wrangler@4.147.0 pages dev
   ```
   Abre em http://localhost:8788 com um banco local vazio (crie usuários de teste com `npx wrangler d1 execute portamkt-db --local --command "INSERT INTO usuarios ..."`; senha em texto puro vira hash no primeiro login).
-- **Aplicar migração no banco real:** `npx wrangler d1 execute portamkt-db --remote --file d1/migracao_00X_....sql`
+- **Aplicar migração no banco real:** `npx -y wrangler@4.147.0 d1 execute portamkt-db --remote --file d1/migracao_00X_....sql`
+- **Ver consumo do D1** (limites da regra 12): `npx -y wrangler@4.147.0 d1 info portamkt-db` (`rows_read_24h`, `rows_written_24h`).
+- **Ver se a publicação deu certo:** `npx -y wrangler@4.147.0 pages deployment list --project-name portamkt --environment production` ("Failure" = o site antigo continua no ar).
 
 ## 10. Job do Databricks
 
@@ -131,17 +136,68 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 - Roda no cluster compartilhado **DATA-COMERCIAL-01**, 1 vez por dia, às 8h (as tabelas de origem só mudam 1x por dia). Falhas mandam e-mail.
 - Lê as duas tabelas sem linhas repetidas, calcula um hash por linha e só envia ao D1 o que mudou (insere novas, apaga as que sumiram). Tem trava: se a origem vier com menos da metade das linhas, aborta sem apagar nada.
 - Usa o secret `portamkt/cloudflare_token` do Databricks (API Token do Cloudflare com permissão D1:Edit).
+- A Emilly **não tem permissão de computação serverless** no workspace; por isso o Job usa o cluster DATA-COMERCIAL-01 (`0811-172632-o2hyyoxq`, desliga após 10 min parado). Existe também a política de cluster "comercial" (`001D0520A2F3F477`, para Jobs) como alternativa.
 - Alterou `databricks/sync_d1.py`? É preciso reenviar o notebook ao Databricks:
-  `databricks workspace import /Users/emillymonte@bemol.com.br/portamkt/sync_d1 --file databricks/sync_d1.py --language PYTHON --format SOURCE --overwrite`
+  `databricks workspace import /Users/emillymonte@bemol.com.br/portamkt/sync_d1 --file databricks/sync_d1.py --language PYTHON --format SOURCE --overwrite --profile emilly`
+  (no Git Bash do Windows, antes rode `export MSYS_NO_PATHCONV=1`, senão o caminho `/Users/...` vira caminho do Windows).
+- Comandos úteis (Databricks CLI, perfil `emilly`):
+  ```
+  databricks jobs list-runs --job-id 1025737974527673 --limit 5 --profile emilly    # últimas execuções
+  databricks jobs get-run <run_id> --profile emilly                                   # status de uma execução
+  databricks jobs get-run-output <task_run_id> --profile emilly                       # erro de uma execução
+  databricks jobs run-now 1025737974527673 --profile emilly --no-wait                 # rodar agora
+  databricks jobs get 1025737974527673 --profile emilly                               # configuração/agendamento
+  databricks jobs update --json @arquivo.json --profile emilly                        # mudar agendamento (job_id + new_settings)
+  ```
 
 ## 11. Pendências conhecidas
 
-- **Aplicar no banco real** (depois que o limite diário do D1 zerar, 20h de Manaus): `d1/migracao_002_indices_leves.sql` e `d1/migracao_003_coletas_latam.sql`. Até aplicar a 003, incluir coleta dá erro.
-
+- **Aplicar no banco real** (combinado para 07/10 às 9h, depois que o limite diário do D1 zerou): `d1/migracao_002_indices_leves.sql` e `d1/migracao_003_coletas_latam.sql`. Até aplicar a 003, incluir coleta dá erro. Depois de aplicar, remova este item.
+- Compartilhar o Job e a pasta do notebook com `carlossimoes@bemol.com.br` (Can Manage): a Emilly faz pela interface do Databricks (Permissions).
 - Traduzir os códigos da coluna `etapa` (`MANIFEST_01`, `VLPOSTNG_01`, …) para nomes legíveis.
 - Abas "Indicadores" e "Extrair Relatório" ainda são placeholders.
 - Detalhe do tracking por NF (`/api/tracking`) já existe na API, mas ainda não tem tela.
 - O formulário "Consultar Agendamento" tem listas fixas de seller/transportadora no HTML.
 - Limitar tentativas de login (regra de rate limiting no Cloudflare).
 - Trocar o dono do Job por um usuário de serviço (service principal) em vez de uma pessoa.
-- Futuro: possível migração para a workstation NVIDIA do setor (via Cloudflare Tunnel).
+- Futuro: possível migração para a workstation NVIDIA do setor (via Cloudflare Tunnel ou só na rede interna).
+- Ideias para facilitar as alterações: separar o JavaScript de `public/index.html` em `public/app.js` (arquivo menor, a IA não corta); checagem automática no GitHub (GitHub Actions) para barrar arquivo cortado, coluna inexistente e remoção de `esc()`; trabalhar em branch com link de preview do Cloudflare antes de juntar na `main`.
+- Login por SSO da Bemol (Cloudflare Access + Entra ID) quando a TI liberar; até lá, usuário e senha.
+
+## 12. Ferramentas e acessos
+
+**Databricks CLI** (`databricks`, versão 1.0 ou mais nova). Workspace: `https://bemol.azuredatabricks.net` (workspace id `926216925051160`).
+- Perfis no `~/.databrickscfg` de quem usa: `bemol` (Carlos, `carlossimoes@bemol.com.br`) e `emilly` (Emilly, `emillymonte@bemol.com.br`).
+  Criar/renovar login: `databricks auth login --host https://bemol.azuredatabricks.net --profile <nome> --workspace-id 926216925051160`.
+- Só a Emilly tem acesso às duas tabelas de origem (o Carlos não tem `USE CATALOG` em `bemolonline`); por isso o Job e o notebook são dela.
+- Explorar tabelas: `databricks experimental aitools tools discover-schema <catalogo.schema.tabela> --profile emilly` e
+  `databricks experimental aitools tools query "SELECT ..." --profile emilly`. A view `dados_entregas_mkt_manifest_01` é lenta (minutos) e tem ~93% de linhas duplicadas (246 mil linhas, ~17,8 mil distintas).
+- Secret do Job: escopo `portamkt`, chave `cloudflare_token` (`databricks secrets list-secrets portamkt --profile emilly` mostra só o nome).
+
+**Cloudflare** (conta `4746b3c1373994e7d5599eb813e754fc`): projeto Pages `portamkt`, banco D1 `portamkt-db` (`46af9aee-add1-421f-90c6-a87f847fca86`).
+- CLI `wrangler`: use `npx -y wrangler@4.147.0 ...` (login com `npx -y wrangler@4.147.0 login`).
+- Secret do site: `SESSION_SECRET`, guardado só no Cloudflare (`wrangler pages secret put SESSION_SECRET --project-name portamkt`). Trocar o valor desloga todo mundo.
+- Plano **gratuito** (decisão: caber no grátis em vez de pagar US$ 5/mês do Workers Paid). Limites na regra 12.
+
+**GitHub:** `emillymonte22/portamkt`, branch `main` publica direto.
+
+## 13. Usuários do portal
+
+Tabela `usuarios` (admin, cd, comercial: um de cada hoje). Para criar um usuário, insira a senha em texto puro; ela vira hash no primeiro login:
+`npx -y wrangler@4.147.0 d1 execute portamkt-db --remote --command "INSERT INTO usuarios (username, senha, perfil) VALUES ('nome', 'senha-inicial', 'cd')"`
+
+## 14. Histórico e decisões (out/2026)
+
+Em ordem, para quem pegar o projeto entender por que as coisas são como são:
+
+1. **Análise inicial (06/10):** a primeira versão tinha login só na tela (bastava editar o `localStorage` para virar admin), API aberta, senhas em texto puro, XSS, datas inventadas, rota de liberação LATAM inexistente e backend duplicado (`worker.js`).
+2. **Segurança:** login com hash PBKDF2, cookie de sessão assinado, todas as rotas `/api` exigindo sessão, permissões no servidor, `esc()` na tela. Tela movida para `public/` (antes a raiz inteira, inclusive configs, ficava pública). `worker.js` removido. SSO foi considerado e adiado (depende da TI); ficou usuário e senha.
+3. **Integração com o Databricks, opções avaliadas:** (A) API consultando o Databricks a cada acesso, (B) cópia periódica para o D1, (C) migrar para Databricks Apps (pago, só usuários do workspace). **Escolhida B**, com um Job do Databricks que envia os dados. Vercel foi descartado (plano grátis proíbe uso comercial; banco de terceiros com limites). Rodar só no computador da Emilly foi considerado (bom para ela sozinha e para testes), mas ficou o Cloudflare para poder escalar para a equipe.
+4. **Tabelas de origem:** `comercial.logint.f_tracking_aereo` (~18 mil linhas, item de NF) e `bemolonline.bol.dados_entregas_mkt_manifest_01` (view lenta e cheia de duplicadas). Nenhuma tem chave única nem coluna de "alterado em"; por isso o Job compara um hash de cada linha.
+5. **Acesso:** o Carlos não tinha acesso à segunda tabela; a Emilly fez o próprio login no Databricks CLI (perfil `emilly`) e o Job/notebook ficaram no nome dela. Trocar por um service principal está nas pendências.
+6. **Job:** a primeira execução falhou (Emilly sem serverless) e passou a usar o cluster DATA-COMERCIAL-01. A primeira carga (06/10, 11h17) copiou 18.415 + 17.816 linhas.
+7. **Limite do D1 estourado:** a carga inicial gerou ~235 mil gravações (cada índice conta), acima das 100 mil/dia do plano grátis, e as leituras chegaram a 3,3 milhões (cada abertura da tela lia a tabela inteira). Correções: sem `COUNT(*)`, filtros em cache, paginação por cursor, índices enxutos (migração 002), Job **1x por dia às 8h** (medição mostrou que as tabelas de origem só mudam 1x por dia).
+8. **"Erro interno" no login de CD/comercial:** a conversão da senha antiga para hash é uma gravação, que falhava com o D1 no limite. Agora a falha não derruba o login.
+9. **Alterações da Emilly via Gemini (copia e cola no GitHub):** um arquivo da API foi colado cortado (a publicação falhou e o site antigo ficou no ar) e colunas foram usadas com nome errado (`DT_FATURAMENTO` em vez de `dt_faturamento`; campos de `entregas_mkt` lidos na tabela de tracking). Daí as regras 9 e 12 e o item "onde está cada campo" da seção 7.
+10. **Coletas LATAM (regras definidas pela Emilly):** só o admin inclui; nasce bloqueada e o botão do admin libera para o CD; várias NFs separadas por "/"; campos CT-e, data da coleta, data do CT-e e entrega no CD; status LATAM na consulta só para o seller Brascol ("Brascol" e "Brascol - ONESHOP" são o mesmo seller). A migração 003 recria `agendamentos` com essas colunas.
+11. **Limitações do Claude Code neste projeto:** o modo automático bloqueia o Claude de criar/alterar o Job que envia dados para fora (Cloudflare) e de conceder permissões no Databricks; esses comandos são rodados pela própria pessoa (prefixo `!` no Claude Code).
