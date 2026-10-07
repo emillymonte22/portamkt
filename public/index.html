@@ -342,12 +342,15 @@
                             <div class="flex flex-wrap justify-between items-start gap-2 mb-4">
                                 <div>
                                     <h3 class="text-base font-bold text-slate-800">Pedidos por mês</h3>
-                                    <p class="text-xs text-slate-500">Situação da entrega ao cliente</p>
+                                    <p class="text-xs text-slate-500">Total de pedidos e evolução mês a mês · passe o mouse para ver a situação da entrega</p>
                                 </div>
-                                <div id="ind-legenda" class="flex flex-wrap gap-4 text-xs text-slate-600"></div>
+                                <div class="flex flex-wrap gap-4 text-xs text-slate-600">
+                                    <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm bg-sky-200"></span>Pedidos no mês</span>
+                                    <span class="flex items-center gap-1.5"><span class="w-4 h-0.5 bg-sky-700"></span>Evolução</span>
+                                </div>
                             </div>
                             <div class="relative">
-                                <div id="ind-grafico" class="flex gap-2 overflow-x-auto pb-1"></div>
+                                <div id="ind-grafico" class="relative flex gap-2 overflow-x-auto pb-1"></div>
                                 <div id="ind-tooltip" class="hidden absolute z-10 pointer-events-none bg-white border border-slate-200 shadow-lg rounded-lg p-3 text-xs text-slate-700 min-w-[170px]"></div>
                             </div>
                         </div>
@@ -925,22 +928,57 @@
             }
             const maior = Math.max(...meses.map(x => x.pedidos), 1);
 
-            document.getElementById('ind-legenda').innerHTML = SERIES_IND.map(s =>
-                `<span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm ${s.cor}"></span>${esc(s.nome)}</span>`).join('');
-
+            // Uma barra clara por mês (total de pedidos) + um ponto no topo; a linha de evolução liga os pontos
             document.getElementById('ind-grafico').innerHTML = meses.map((x, i) => {
-                const visiveis = SERIES_IND.filter(s => x[s.campo] > 0);
-                const segmentos = visiveis.map((s, j) => `<div class="${s.cor} ${j === visiveis.length - 1 ? 'rounded-t' : ''}" style="height:${x[s.campo] / maior * 100}%"></div>`).join('');
+                const altura = x.pedidos / maior * 100;
                 return `
                     <div class="flex-1 min-w-[40px] flex flex-col items-stretch cursor-default" data-i="${i}"
                          onmouseenter="mostrarTooltipMes(this)" onmouseleave="esconderTooltipMes()">
-                        <p class="text-[11px] text-center text-slate-500 mb-1">${x.pedidos ? numero(x.pedidos) : ''}</p>
-                        <div class="h-52 flex flex-col-reverse gap-[2px] px-1.5 border-b border-slate-200 hover:bg-slate-50 rounded-t">${segmentos}</div>
+                        <p class="text-[11px] text-center text-slate-500 mb-3">${x.pedidos ? numero(x.pedidos) : ''}</p>
+                        <div class="relative h-52 border-b border-slate-200 hover:bg-slate-50 rounded-t">
+                            <div class="absolute bottom-0 inset-x-1.5 bg-sky-200 rounded-t" style="height:${altura}%"></div>
+                            <span class="ind-ponto absolute left-1/2 w-2.5 h-2.5 rounded-full bg-sky-700 ring-2 ring-white z-[2]"
+                                  style="bottom:${altura}%; transform:translate(-50%, 50%)"></span>
+                        </div>
                         <p class="text-[11px] text-center text-slate-500 mt-1.5">${esc(nomeMes(x.chave))}</p>
                     </div>`;
             }).join('');
             mesesGrafico = meses;
+            // espera o Tailwind (CDN) aplicar as classes novas antes de medir as posições dos pontos
+            setTimeout(desenharLinhaEvolucao, 120);
         }
+
+        // Liga os pontos das barras com uma linha (SVG por cima, nas posições reais da tela)
+        function desenharLinhaEvolucao() {
+            const grafico = document.getElementById('ind-grafico');
+            grafico.querySelector('svg')?.remove();
+            const pontos = [...grafico.querySelectorAll('.ind-ponto')];
+            if (pontos.length < 2) return;
+            const caixa = grafico.getBoundingClientRect();
+            const coords = pontos.map(p => {
+                const r = p.getBoundingClientRect();
+                return [r.left + r.width / 2 - caixa.left + grafico.scrollLeft, r.top + r.height / 2 - caixa.top + grafico.scrollTop];
+            });
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.setAttribute('class', 'absolute left-0 top-0 pointer-events-none z-[1]');
+            svg.setAttribute('width', grafico.scrollWidth);
+            svg.setAttribute('height', grafico.scrollHeight);
+            const linha = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+            linha.setAttribute('points', coords.map(c => c.join(',')).join(' '));
+            linha.setAttribute('fill', 'none');
+            linha.setAttribute('stroke', '#0369a1'); // sky-700
+            linha.setAttribute('stroke-width', '2');
+            linha.setAttribute('stroke-linejoin', 'round');
+            linha.setAttribute('stroke-linecap', 'round');
+            svg.appendChild(linha);
+            grafico.appendChild(svg);
+        }
+
+        let tempoRedesenho = null;
+        window.addEventListener('resize', () => {
+            clearTimeout(tempoRedesenho);
+            tempoRedesenho = setTimeout(() => { if (mesesGrafico.length) desenharLinhaEvolucao(); }, 150);
+        });
 
         let mesesGrafico = [];
 
