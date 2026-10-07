@@ -56,9 +56,7 @@ export async function onRequest(context) {
     if (path === '/api/entregas' && request.method === 'GET') return await listarEntregas(env, url.searchParams);
     if (path === '/api/entregas/filtros' && request.method === 'GET') return await filtrosEntregas(env);
     if (path === '/api/indicadores' && request.method === 'GET') return await indicadores(env, url.searchParams);
-    if (path === '/api/indicadores/leadtime' && request.method === 'GET') return await leadTimeSemanal(env, url.searchParams);
-    if (path === '/api/indicadores/filtros' && request.method === 'GET') return await filtrosIndicadores(env);
-    if (path === '/api/relatorio' && request.method === 'GET') return await relatorio(env, url.searchParams);
+    if (path === '/api/indicadores/leadtime' && request.method === 'GET') return await leadTimeSemanal(env, url.searchParams);    if (path === '/api/relatorio' && request.method === 'GET') return await relatorio(env, url.searchParams);
     if (path === '/api/relatorio/filtros' && request.method === 'GET') return filtrosRelatorio();
     if (path === '/api/tracking' && request.method === 'GET') return await listarTracking(env, url.searchParams);
     if (path === '/api/sync-status' && request.method === 'GET') return await statusSync(env);
@@ -340,6 +338,8 @@ async function paginaEntregas(env, filtros, valores) {
     itens.push(linha);
   }
   const pagina = itens.slice(0, ITENS_POR_PAGINA);
+  const planilha = await planilhaPorNf(env, pagina.map(l => l.nota_fiscal_explode));
+  for (const linha of pagina) completarComPlanilha(linha, planilha.get(linha.nota_fiscal_explode));
   const ultimo = pagina[pagina.length - 1];
   return {
     itens: pagina,
@@ -366,6 +366,46 @@ async function filtrosEntregas(env) {
   return Response.json(cacheFiltros.dados);
 }
 
+// ---------- Planilha CONTROLE_AÉREO (tabela controle_aereo) ----------
+// Completa o que falta em entregas_mkt; o banco vale primeiro (decisão da Emilly, 07/10):
+//   Entrega CD = AGENDA CD da planilha, data da coleta e data do CT-e.
+// Uma linha por NF; se a mesma NF aparecer duas vezes (no meio de uma sincronização), vale a mais nova (maior rowid).
+const JUNTA_PLANILHA = `LEFT JOIN controle_aereo c ON c.rowid = (
+  SELECT c2.rowid FROM controle_aereo c2 WHERE c2.nota_fiscal_explode = e.nota_fiscal_explode ORDER BY c2.rowid DESC LIMIT 1)`;
+const COLUNAS_COMPLETADAS = {
+  data_coleta: 'COALESCE(e.data_coleta, c.data_coleta)',
+  emissao_cte: 'COALESCE(e.emissao_cte, c.data_cte)',
+  data_entrega: 'COALESCE(e.data_entrega, c.agenda_cd)',
+};
+const colunaCompleta = nome => COLUNAS_COMPLETADAS[nome] || `e.${nome}`;
+
+// Para listas já carregadas (página de pedidos, relatório): busca as NFs na planilha pelo índice
+// idx_controle_nf, em lotes de 90 (o D1 aceita até 100 parâmetros por consulta).
+async function planilhaPorNf(env, nfs) {
+  const unicas = [...new Set(nfs.filter(Boolean))];
+  const mapa = new Map();
+  if (!unicas.length) return mapa;
+  const lotes = [];
+  for (let i = 0; i < unicas.length; i += 90) lotes.push(unicas.slice(i, i + 90));
+  const respostas = await env.DB.batch(lotes.map(lote => env.DB.prepare(
+    `SELECT rowid AS _rid, * FROM controle_aereo WHERE nota_fiscal_explode IN (${lote.map(() => '?').join(', ')})`
+  ).bind(...lote)));
+  for (const { results } of respostas) {
+    for (const linha of results || []) {
+      const atual = mapa.get(linha.nota_fiscal_explode);
+      if (!atual || linha._rid > atual._rid) mapa.set(linha.nota_fiscal_explode, linha);
+    }
+  }
+  return mapa;
+}
+
+function completarComPlanilha(linha, planilha) {
+  if (!planilha) return;
+  linha.data_coleta = linha.data_coleta || planilha.data_coleta;
+  linha.emissao_cte = linha.emissao_cte || planilha.data_cte;
+  linha.data_entrega = linha.data_entrega || planilha.agenda_cd;
+}
+
 // Indicadores por seller e mês (a tela soma os grupos para os totais).
 // Uma consulta só, que lê as linhas do período uma vez (regra 12); a tabela muda 1x por dia, então o
 // resultado fica em cache por 30 min para a mesma combinação de filtros.
@@ -384,23 +424,25 @@ async function indicadores(env, p) {
   const guardado = cacheIndicadores.get(chave);
   if (guardado && Date.now() - guardado.em < CACHE_FILTROS_MS) return Response.json(guardado.dados);
 
-  const filtros = ['dt_pedido BETWEEN ? AND ?', 'pedido IS NOT NULL'];
+  const filtros = ['e.dt_pedido BETWEEN ? AND ?', 'e.pedido IS NOT NULL'];
   const valores = [de, ate];
   if (seller) {
-    filtros.push('n_fornecedor = ?');
+    filtros.push('e.n_fornecedor = ?');
     valores.push(seller);
   }
 
-  // Prazos em dias só contam quando as duas datas existem e a diferença não é negativa
+  // Prazos em dias só contam quando as duas datas existem e a diferença não é negativa.
+  // Coleta → entrega CD usa as datas completadas pela planilha (JUNTA_PLANILHA).
   const { results } = await env.DB.prepare(
     `WITH base AS (
-       SELECT pedido,
-              MAX(n_fornecedor) AS seller, MAX(dt_pedido) AS dt_pedido, UPPER(TRIM(MAX(no_prazo))) AS status,
-              julianday(MAX(dt_faturamento)) - julianday(MAX(dt_pedido)) AS d_fat,
-              julianday(MAX(dt_entrega))     - julianday(MAX(dt_pedido)) AS d_ent,
-              julianday(MAX(data_entrega))   - julianday(MAX(data_coleta)) AS d_cd
-       FROM entregas_mkt WHERE ${filtros.join(' AND ')}
-       GROUP BY pedido
+       SELECT e.pedido,
+              MAX(e.n_fornecedor) AS seller, MAX(e.dt_pedido) AS dt_pedido, UPPER(TRIM(MAX(e.no_prazo))) AS status,
+              julianday(MAX(e.dt_faturamento)) - julianday(MAX(e.dt_pedido)) AS d_fat,
+              julianday(MAX(e.dt_entrega))     - julianday(MAX(e.dt_pedido)) AS d_ent,
+              julianday(MAX(${colunaCompleta('data_entrega')})) - julianday(MAX(${colunaCompleta('data_coleta')})) AS d_cd
+       FROM entregas_mkt e ${JUNTA_PLANILHA}
+       WHERE ${filtros.join(' AND ')}
+       GROUP BY e.pedido
      )
      SELECT seller, substr(dt_pedido, 1, 7) AS mes, COUNT(*) AS pedidos,
             SUM(status = 'NO PRAZO') AS no_prazo,
@@ -450,43 +492,43 @@ async function leadTimeSemanal(env, p) {
   const guardado = cacheLeadTime.get(chave);
   if (guardado && Date.now() - guardado.em < CACHE_FILTROS_MS) return Response.json(guardado.dados);
 
-  const filtros = ['dt_pedido BETWEEN ? AND ?', 'pedido IS NOT NULL'];
+  const filtros = ['e.dt_pedido BETWEEN ? AND ?', 'e.pedido IS NOT NULL'];
   const valores = [inicio, ultimo];
-  if (seller) { filtros.push('n_fornecedor = ?'); valores.push(seller); }
-  if (uf) { filtros.push('uf = ?'); valores.push(uf); }
+  if (seller) { filtros.push('e.n_fornecedor = ?'); valores.push(seller); }
+  if (uf) { filtros.push('e.uf = ?'); valores.push(uf); }
 
   const colunas = [...new Set(ETAPAS_LEAD_TIME.flatMap(([, de, ate]) => [de, ate]))];
   const medias = ETAPAS_LEAD_TIME.map(([nome, de, ate]) =>
     `AVG(CASE WHEN julianday(${ate}) - julianday(${de}) >= 0 THEN julianday(${ate}) - julianday(${de}) END) AS ${nome},
      COUNT(CASE WHEN julianday(${ate}) - julianday(${de}) >= 0 THEN 1 END) AS n_${nome}`).join(',\n');
-  const { results } = await env.DB.prepare(
-    `WITH base AS (
-       SELECT ${colunas.map(c => `MAX(${c}) AS ${c}`).join(', ')}
-       FROM entregas_mkt WHERE ${filtros.join(' AND ')}
-       GROUP BY pedido
-     )
-     SELECT date(dt_pedido, '-' || ((CAST(strftime('%w', dt_pedido) AS INTEGER) + 6) % 7) || ' days') AS semana,
-            COUNT(*) AS pedidos, ${medias}
-     FROM base GROUP BY semana ORDER BY semana`
-  ).bind(...valores).all();
+  // 2ª consulta: UFs que têm pedidos nessas semanas (do seller escolhido), para o filtro de UF
+  const [semanas, ufs] = await env.DB.batch([
+    env.DB.prepare(
+      `WITH base AS (
+         SELECT ${colunas.map(c => `MAX(${colunaCompleta(c)}) AS ${c}`).join(', ')}
+         FROM entregas_mkt e ${JUNTA_PLANILHA}
+         WHERE ${filtros.join(' AND ')}
+         GROUP BY e.pedido
+       )
+       SELECT date(dt_pedido, '-' || ((CAST(strftime('%w', dt_pedido) AS INTEGER) + 6) % 7) || ' days') AS semana,
+              COUNT(*) AS pedidos, ${medias}
+       FROM base GROUP BY semana ORDER BY semana`
+    ).bind(...valores),
+    env.DB.prepare(
+      `SELECT DISTINCT uf FROM entregas_mkt
+       WHERE dt_pedido BETWEEN ? AND ? ${seller ? 'AND n_fornecedor = ?' : ''} AND uf IS NOT NULL AND TRIM(uf) <> ''
+       ORDER BY uf`
+    ).bind(inicio, ultimo, ...(seller ? [seller] : [])),
+  ]);
 
-  const dados = { inicio, fim: ultimo, semanas: SEMANAS_LEAD_TIME, seller, uf, linhas: results || [] };
+  const dados = {
+    inicio, fim: ultimo, semanas: SEMANAS_LEAD_TIME, seller, uf,
+    linhas: semanas.results || [],
+    ufs: (ufs.results || []).map(r => r.uf),
+  };
   if (cacheLeadTime.size > 50) cacheLeadTime.clear();
   cacheLeadTime.set(chave, { em: Date.now(), dados });
   return Response.json(dados);
-}
-
-// UFs para o filtro do lead time (lê a coluna inteira uma vez; cache de 30 min)
-let cacheFiltrosIndicadores = null;
-
-async function filtrosIndicadores(env) {
-  if (!cacheFiltrosIndicadores || Date.now() - cacheFiltrosIndicadores.em > CACHE_FILTROS_MS) {
-    const { results } = await env.DB.prepare(
-      `SELECT DISTINCT uf AS v FROM entregas_mkt WHERE uf IS NOT NULL AND TRIM(uf) <> '' ORDER BY 1`
-    ).all();
-    cacheFiltrosIndicadores = { em: Date.now(), dados: { ufs: results.map(r => r.v) } };
-  }
-  return Response.json(cacheFiltrosIndicadores.dados);
 }
 
 // Relatório para baixar: todas as colunas de entregas_mkt + transportadora e CT-e do tracking (pela NF).
@@ -541,11 +583,24 @@ async function relatorio(env, p) {
     linha.cte = [...new Set(pares.map(([, cte]) => cte).filter(Boolean))].join(', ');
     return linha;
   });
+
+  // Planilha CONTROLE_AÉREO: completa as datas vazias e acrescenta as colunas dela (prefixo pl_)
+  const planilha = await planilhaPorNf(env, itens.map(l => l.nota_fiscal_explode));
+  for (const linha of itens) {
+    const pl = planilha.get(linha.nota_fiscal_explode);
+    completarComPlanilha(linha, pl);
+    for (const campo of CAMPOS_PLANILHA_RELATORIO) linha[`pl_${campo}`] = pl ? pl[campo] : null;
+  }
   return Response.json({
     itens,
     proximo: itens.length === LINHAS_POR_PARTE_RELATORIO ? itens[itens.length - 1]._id : null,
   });
 }
+
+const CAMPOS_PLANILHA_RELATORIO = [
+  'ncoleta', 'transportadora', 'cte', 'origem', 'destino', 'volumes', 'peso', 'valor_nota', 'valor_frete',
+  'data_coleta', 'data_cte', 'previsao_entrega', 'chegada_mao', 'agenda_cd', 'meta', 'lead_time', 'dias_atraso', 'status',
+];
 
 // Transportadoras do relatório e para quais sellers cada uma vale (pedido da Emilly, 07/10):
 // GRU - KM CARGO só Brascol; LLS só Vitrola e Tramontina; LATAM fica disponível mesmo sem dados no tracking ainda.

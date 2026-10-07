@@ -9,16 +9,23 @@
 #
 # Requisitos:
 #   - secret `portamkt/cloudflare_token` (API Token do Cloudflare com permissão D1:Edit)
+#   - secrets `BemolADL/client-id-cd`, `client-secret-cd`, `tenant-id-cd` (leitura da planilha no SharePoint)
 #   - tabelas criadas no D1 com d1/schema.sql
 
 # COMMAND ----------
 
-import json
+import base64
+import re
 import time
-from datetime import datetime, timezone
+import unicodedata
+from datetime import date, datetime, timedelta, timezone
+from io import BytesIO
 
+import pandas as pd
 import requests
+from msal import ConfidentialClientApplication
 from pyspark.sql import functions as F
+from pyspark.sql.types import DoubleType, StringType, StructField, StructType
 
 CF_ACCOUNT_ID = "4746b3c1373994e7d5599eb813e754fc"
 D1_DATABASE_ID = "46af9aee-add1-421f-90c6-a87f847fca86"
@@ -77,8 +84,9 @@ def valor_sql(v):
 # COMMAND ----------
 
 
-def sincronizar(origem, destino):
-    df = spark.table(origem).distinct()
+def sincronizar(origem, destino, df=None):
+    """origem: nome da tabela no Databricks (ou só um rótulo para o log, quando df é passado)."""
+    df = (df if df is not None else spark.table(origem)).distinct()
     colunas = [c.lower() for c in df.columns]
     df = df.toDF(*colunas).withColumn(
         "row_hash", F.sha2(F.to_json(F.struct(*colunas)), 256)
@@ -129,5 +137,137 @@ def sincronizar(origem, destino):
 
 # COMMAND ----------
 
+# ---------- Planilha CONTROLE_AÉREO_2026.xlsx (SharePoint), aba "Marketplace" -> controle_aereo ----------
+# Uma linha por coleta na planilha; a coluna NOTAS tem várias NFs separadas por "/". Aqui vira uma linha
+# por NF (10 dígitos, igual a entregas_mkt.nota_fiscal_explode). Se a mesma NF aparecer em mais de uma
+# coleta, fica a última linha da planilha. O portal usa só para completar o que falta no banco.
+
+PLANILHA_URL = (
+    "https://bemol-my.sharepoint.com/:x:/r/personal/emillymonte_bemol_com_br/_layouts/15/Doc.aspx"
+    "?sourcedoc=%7BB4B387C6-0972-44E8-88BF-990B320E56CB%7D&file=CONTROLE_A%C3%89REO_2026.xlsx"
+    "&action=default&mobileredirect=true"
+)
+PLANILHA_ABA = "Marketplace"
+
+# coluna no D1 -> nomes possíveis na planilha (já normalizados e sem "_"), tipo
+COLUNAS_PLANILHA = {
+    "ncoleta":          (["ncoleta", "nocoleta", "coleta"], "texto"),
+    "fornecedor":       (["fornecedor"], "texto"),
+    "origem":           (["origem"], "texto"),
+    "destino":          (["destino"], "texto"),
+    "data_coleta":      (["datadacoleta", "datacoleta"], "data"),
+    "transportadora":   (["transportadora"], "texto"),
+    "notas":            (["notas", "notasfiscais", "nf"], "texto"),
+    "cte":              (["ncte", "nocte", "cte"], "texto"),
+    "volumes":          (["volumes", "volume"], "numero"),
+    "peso":             (["peso"], "numero"),
+    "data_cte":         (["datacte"], "data"),
+    "valor_nota":       (["valordanota", "valornota"], "numero"),
+    "valor_frete":      (["valortotaldefrete", "valorfrete"], "numero"),
+    "previsao_entrega": (["previsaodeentrega", "previsaoentrega"], "data"),
+    "chegada_mao":      (["chegadamao"], "data"),
+    "agenda_cd":        (["agendacd"], "data"),
+    "meta":             (["meta"], "numero"),
+    "lead_time":        (["leadtime"], "numero"),
+    "dias_atraso":      (["diasdeatraso", "diasatraso"], "numero"),
+    "status":           (["status"], "texto"),
+}
+
+
+def baixar_planilha_sharepoint(url):
+    """Mesmo acesso do notebook 'EXEMPLO CONSULTA EXCEL SHAREPOINT' (Graph API, app do CD)."""
+    app = ConfidentialClientApplication(
+        client_id=dbutils.secrets.get(scope="BemolADL", key="client-id-cd"),
+        client_credential=dbutils.secrets.get(scope="BemolADL", key="client-secret-cd"),
+        authority=f"https://login.microsoftonline.com/{dbutils.secrets.get(scope='BemolADL', key='tenant-id-cd')}",
+    )
+    token = app.acquire_token_for_client(scopes=["https://graph.microsoft.com/.default"])
+    if "access_token" not in token:
+        raise RuntimeError(f"Erro ao gerar token do SharePoint: {token.get('error_description')}")
+    codigo = base64.urlsafe_b64encode(url.encode("utf-8")).decode("utf-8").rstrip("=")
+    resp = requests.get(
+        f"https://graph.microsoft.com/v1.0/shares/u!{codigo}/driveItem/content",
+        headers={"Authorization": f"Bearer {token['access_token']}"},
+        timeout=300,
+    )
+    if resp.status_code != 200:
+        raise RuntimeError(f"Erro ao baixar a planilha: {resp.status_code} - {resp.text[:300]}")
+    return resp.content
+
+
+def chave_coluna(nome):
+    nome = unicodedata.normalize("NFKD", str(nome).strip().lower()).encode("ASCII", "ignore").decode("utf-8")
+    return re.sub(r"[^a-z0-9]", "", nome)
+
+
+def para_texto(v):
+    if v is None or (isinstance(v, float) and pd.isna(v)) or v is pd.NaT:
+        return None
+    if isinstance(v, float) and v.is_integer():
+        v = int(v)  # 147117.0 -> "147117"
+    t = str(v).strip()
+    return t or None
+
+
+def para_numero(v):
+    if isinstance(v, (int, float)) and not pd.isna(v):
+        return float(v)
+    achado = re.search(r"-?\d+(?:[.,]\d+)?", str(v or ""))  # ex.: "DIAS DE ATRASO: 1"
+    return float(achado.group().replace(",", ".")) if achado else None
+
+
+def para_data(v):
+    """Data da planilha -> 'AAAA-MM-DD' (aceita data do Excel, número serial ou texto DD/MM/AAAA)."""
+    if v is None or v is pd.NaT or (isinstance(v, float) and pd.isna(v)):
+        return None
+    if isinstance(v, (datetime, date, pd.Timestamp)):
+        return v.strftime("%Y-%m-%d")
+    if isinstance(v, (int, float)):
+        return (date(1899, 12, 30) + timedelta(days=int(v))).isoformat() if 20000 < v < 80000 else None
+    t = str(v).strip()
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", t)
+    if m:
+        return m.group(0)
+    m = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})", t)
+    return f"{m.group(3)}-{int(m.group(2)):02d}-{int(m.group(1)):02d}" if m else None
+
+
+def ler_controle_aereo():
+    pdf = pd.read_excel(BytesIO(baixar_planilha_sharepoint(PLANILHA_URL)), sheet_name=PLANILHA_ABA, dtype=object)
+    por_chave = {chave_coluna(c): c for c in pdf.columns}
+    origem_col = {}
+    for destino, (nomes, _) in COLUNAS_PLANILHA.items():
+        achada = next((por_chave[n] for n in nomes if n in por_chave), None)
+        if achada is None and destino == "notas":
+            raise RuntimeError(f"Aba {PLANILHA_ABA}: coluna NOTAS não encontrada. Colunas: {list(pdf.columns)}")
+        origem_col[destino] = achada
+
+    conversor = {"texto": para_texto, "numero": para_numero, "data": para_data}
+    por_nf = {}
+    for _, linha in pdf.iterrows():
+        valores = {
+            destino: (conversor[tipo](linha[origem_col[destino]]) if origem_col[destino] is not None else None)
+            for destino, (_, tipo) in COLUNAS_PLANILHA.items()
+        }
+        for nf in re.findall(r"\d+", valores.pop("notas") or ""):
+            nf = nf.lstrip("0")
+            if nf:
+                por_nf[nf.zfill(10)] = {"nota_fiscal_explode": nf.zfill(10), **valores}  # última coleta vence
+
+    campos = ["nota_fiscal_explode"] + [c for c in COLUNAS_PLANILHA if c != "notas"]
+    schema = StructType([
+        StructField(c, DoubleType() if COLUNAS_PLANILHA.get(c, ([], "texto"))[1] == "numero" else StringType())
+        for c in campos
+    ])
+    print(f"Planilha {PLANILHA_ABA}: {len(pdf)} coletas -> {len(por_nf)} NFs")
+    return spark.createDataFrame([tuple(r[c] for c in campos) for r in por_nf.values()], schema)
+
+
+# COMMAND ----------
+
+# As tabelas do Databricks vão primeiro; se a planilha falhar (SharePoint fora, aba renomeada…), elas já foram
+# atualizadas e o Job termina com erro no fim (o e-mail de falha avisa).
 for origem, destino in TABELAS.items():
     sincronizar(origem, destino)
+
+sincronizar(f"planilha {PLANILHA_ABA}", "controle_aereo", ler_controle_aereo())

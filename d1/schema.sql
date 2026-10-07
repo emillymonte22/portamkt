@@ -106,6 +106,33 @@ CREATE INDEX IF NOT EXISTS idx_entregas_nf     ON entregas_mkt (nf);
 CREATE INDEX IF NOT EXISTS idx_entregas_nf_exp ON entregas_mkt (nota_fiscal_explode);
 CREATE INDEX IF NOT EXISTS idx_entregas_data_compra ON entregas_mkt (dt_pedido DESC, pedido_compra DESC);
 
+-- Origem: planilha CONTROLE_AÉREO_2026.xlsx (SharePoint), aba "Marketplace" — uma linha por NF do seller.
+-- Completa o que falta em entregas_mkt (Entrega CD = agenda_cd, data_coleta, data_cte); o banco vale primeiro.
+CREATE TABLE IF NOT EXISTS controle_aereo (
+  row_hash            TEXT PRIMARY KEY,
+  nota_fiscal_explode TEXT,
+  ncoleta             TEXT,
+  fornecedor          TEXT,
+  origem              TEXT,
+  destino             TEXT,
+  transportadora      TEXT,
+  cte                 TEXT,
+  volumes             REAL,
+  peso                REAL,
+  valor_nota          REAL,
+  valor_frete         REAL,
+  data_coleta         TEXT,
+  data_cte            TEXT,
+  previsao_entrega    TEXT,
+  chegada_mao         TEXT,
+  agenda_cd           TEXT,
+  meta                REAL,
+  lead_time           REAL,
+  dias_atraso         REAL,
+  status              TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_controle_nf ON controle_aereo (nota_fiscal_explode);
+
 -- Uma linha por execução do Job, para o portal mostrar "atualizado em ..."
 CREATE TABLE IF NOT EXISTS sync_log (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
