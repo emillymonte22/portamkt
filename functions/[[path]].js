@@ -457,18 +457,30 @@ async function leadTimeSemanal(env, p) {
   const [a, m, d] = fim.split('-').map(Number);
   const diaFim = Date.UTC(a, m - 1, d);
   const segundaFim = diaFim - ((new Date(diaFim).getUTCDay() + 6) % 7) * 86400000;
-  const inicio = new Date(segundaFim - (SEMANAS_LEAD_TIME - 1) * 7 * 86400000).toISOString().slice(0, 10);
   const ultimo = new Date(segundaFim + 6 * 86400000).toISOString().slice(0, 10);
+  // "de" (filtro geral da aba): mostra menos semanas se o período for curto, e só pedidos a partir dele
+  const de = p.get('de') || '';
+  if (de && !/^\d{4}-\d{2}-\d{2}$/.test(de)) return erro(400, 'Data inválida');
+  if (de && de > fim) return erro(400, 'A data inicial é maior que a final');
+  let semanasMostradas = SEMANAS_LEAD_TIME;
+  if (de) {
+    const [ad, md, dd] = de.split('-').map(Number);
+    const diaDe = Date.UTC(ad, md - 1, dd);
+    const segundaDe = diaDe - ((new Date(diaDe).getUTCDay() + 6) % 7) * 86400000;
+    semanasMostradas = Math.min(SEMANAS_LEAD_TIME, Math.round((segundaFim - segundaDe) / (7 * 86400000)) + 1);
+  }
+  const inicio = new Date(segundaFim - (semanasMostradas - 1) * 7 * 86400000).toISOString().slice(0, 10);
+  const desde = de && de > inicio ? de : inicio;
 
   const seller = p.get('seller') || '';
   const uf = p.get('uf') || '';
   const tabela = await tabelaPedidos(env);
-  const chave = JSON.stringify([tabela, inicio, seller, uf]);
+  const chave = JSON.stringify([tabela, desde, fim, seller, uf]);
   const guardado = cacheLeadTime.get(chave);
   if (guardado && Date.now() - guardado.em < CACHE_FILTROS_MS) return Response.json(guardado.dados);
 
   const filtros = ['dt_pedido BETWEEN ? AND ?', 'pedido IS NOT NULL'];
-  const valores = [inicio, ultimo];
+  const valores = [desde, fim]; // pedidos até o "Até" (não até o domingo daquela semana)
   if (seller) { filtros.push('n_fornecedor = ?'); valores.push(seller); }
   if (uf) { filtros.push('uf = ?'); valores.push(uf); }
 
@@ -492,11 +504,11 @@ async function leadTimeSemanal(env, p) {
       `SELECT DISTINCT uf FROM ${tabela}
        WHERE dt_pedido BETWEEN ? AND ? ${seller ? 'AND n_fornecedor = ?' : ''} AND uf IS NOT NULL AND TRIM(uf) <> ''
        ORDER BY uf`
-    ).bind(inicio, ultimo, ...(seller ? [seller] : [])),
+    ).bind(desde, fim, ...(seller ? [seller] : [])),
   ]);
 
   const dados = {
-    inicio, fim: ultimo, semanas: SEMANAS_LEAD_TIME, seller, uf,
+    inicio, fim: ultimo, semanas: semanasMostradas, seller, uf,
     linhas: semanas.results || [],
     ufs: (ufs.results || []).map(r => r.uf),
   };
