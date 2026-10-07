@@ -153,6 +153,8 @@
                                         <th class="p-3">DT_PEDIDO</th>
                                         <th class="p-3">NOTA SELLER</th>
                                         <th class="p-3">DT_NF_SELLER</th>
+                                        <th class="p-3">TRANSPORTADORA</th>
+                                        <th class="p-3">CT-E</th>
                                         <th class="p-3">DATA_COLETA</th>
                                         <th class="p-3">EMISSAO_CTE</th>
                                         <th class="p-3">DATA_EMBARQUE</th>
@@ -165,7 +167,7 @@
                                     </tr>
                                 </thead>
                                 <tbody id="tabela-entregas" class="divide-y divide-slate-200">
-                                    <tr><td colspan="14" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>
+                                    <tr><td colspan="16" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -646,7 +648,7 @@
             document.getElementById('entregas-aviso').classList.add('hidden');
             document.getElementById('entregas-resultado').classList.remove('hidden');
             document.getElementById('tabela-entregas').innerHTML =
-                '<tr><td colspan="14" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>';
+                '<tr><td colspan="16" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>';
             carregarEntregas();
         }
 
@@ -703,7 +705,7 @@
 
                 qtd = itens.length;
                 tbody.innerHTML = itens.length === 0
-                    ? '<tr><td colspan="14" class="p-4 text-center text-slate-400">Nenhum pedido encontrado.</td></tr>'
+                    ? '<tr><td colspan="16" class="p-4 text-center text-slate-400">Nenhum pedido encontrado.</td></tr>'
                     : itens.map(i => `
                         <tr class="hover:bg-slate-50">
                             <td class="p-3 font-medium text-slate-900">${txt(i.pedido_compra)}</td>
@@ -711,6 +713,8 @@
                             <td class="p-3">${formatarData(i.dt_pedido)}</td>
                             <td class="p-3">${txt(i.nota_fiscal_explode)}</td>
                             <td class="p-3">${formatarData(i.emissao)}</td>
+                            <td class="p-3">${txt(i.transportadora)}</td>
+                            <td class="p-3 font-mono">${txt(i.cte)}</td>
                             <td class="p-3">${formatarData(i.data_coleta)}</td>
                             <td class="p-3">${formatarData(i.emissao_cte)}</td>
                             <td class="p-3">${formatarData(i.data_embarque)}</td>
@@ -722,7 +726,7 @@
                             <td class="p-3"><span class="${corStatus(i.no_prazo)} text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap">${txt(i.no_prazo)}</span></td>
                         </tr>`).join('');
             } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="14" class="p-4 text-center text-red-500">${esc(err.message)}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="16" class="p-4 text-center text-red-500">${esc(err.message)}</td></tr>`;
             }
 
             const inicio = qtd ? (paginaEntregas - 1) * POR_PAGINA + 1 : 0;
@@ -991,7 +995,7 @@
             ['nota_fiscal_explode', 'NOTA SELLER', 'texto'], ['emissao', 'DT_NF_SELLER', 'data'],
             ['transportador', 'TRANSPORTADORA'], ['cte', 'CT-E', 'texto'],
             ['data_coleta', 'DATA_COLETA', 'data'], ['emissao_cte', 'EMISSAO_CTE', 'data'],
-            ['data_embarque', 'DATA_EMBARQUE', 'data'], ['data_entrega', 'ENTREGA CD', 'data'],
+            ['data_embarque', 'DATA_EMBARQUE', 'data'], ['data_entrega', 'ENTREGA CD', 'data'], ['fonte_entrega_cd', 'FONTE ENTREGA CD'],
             ['dt_faturamento', 'DT_FATURAMENTO_CD', 'data'], ['nf', 'NOTA BEMOL', 'texto'],
             ['dt_entrega', 'DT_ENTREGA_CLIENTE', 'data'], ['no_prazo', 'STATUS'],
             ['bairro', 'BAIRRO'], ['cidade', 'CIDADE'], ['zona', 'ZONA'], ['uf', 'UF'],

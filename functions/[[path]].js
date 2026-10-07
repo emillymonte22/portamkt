@@ -250,6 +250,20 @@ async function alterarLiberacaoLatam(request, env, id) {
 
 // ---------- Dados do Databricks ----------
 
+// Base geral (decisão da Emilly, 07/10): o Job junta as 3 bases — manifest da BOL, tracking aéreo e a planilha
+// CONTROLE_AÉREO — por NF do seller + seller e grava a tabela base_geral (uma linha por linha do manifest, datas,
+// CT-e e transportadora já unificados). O portal lê só ela. Até a 1ª carga terminar (registrada em sync_log),
+// usa entregas_mkt, só com os dados do manifest. Conferido a cada 10 min (1 linha lida).
+let cacheTabela = null;
+
+async function tabelaPedidos(env) {
+  if (!cacheTabela || Date.now() - cacheTabela.em > 10 * 60 * 1000) {
+    const pronta = await env.DB.prepare(`SELECT 1 FROM sync_log WHERE tabela = 'base_geral' LIMIT 1`).first();
+    cacheTabela = { em: Date.now(), nome: pronta ? 'base_geral' : 'entregas_mkt' };
+  }
+  return cacheTabela.nome;
+}
+
 async function listarEntregas(env, p) {
   const filtros = [];
   const valores = [];
@@ -284,8 +298,8 @@ async function listarEntregas(env, p) {
   // A lista é por pedido de compra; linhas sem pedido_compra não aparecem (e quebrariam o cursor)
   filtros.push('pedido_compra IS NOT NULL');
 
-  // Paginação por cursor (data + pedido de compra do último item da página anterior): usa o índice
-  // idx_entregas_data_compra e lê só as linhas da página, em vez de pular linhas com OFFSET.
+  // Paginação por cursor (data + pedido de compra do último item da página anterior): usa o índice de
+  // (dt_pedido, pedido_compra) e lê só as linhas da página, em vez de pular linhas com OFFSET.
   const aposData = p.get('apos_data');
   const aposPedidoCompra = Number(p.get('apos_pedido_compra'));
   if (aposData && aposPedidoCompra) {
@@ -293,41 +307,43 @@ async function listarEntregas(env, p) {
     valores.push(aposData, aposPedidoCompra);
   }
 
-  if (!busca) return Response.json(await paginaEntregas(env, filtros, valores));
+  const tabela = await tabelaPedidos(env);
+  if (!busca) return Response.json(await paginaEntregas(env, tabela, filtros, valores));
 
   // Busca por número de NF, pedido de compra ou ordem (aceita digitar com pontos, traços etc.)
   const numero = busca.replace(/\D/g, '');
   if (!numero || numero.length > 18) return erro(400, 'Busque por número de NF, pedido de compra ou ordem');
 
-  // 1º: número exato, usando os índices (leve)
+  // 1º: número exato nas colunas com índice (pedido de compra e NF do seller): leve
   const n = Number(numero);
-  const exata = await paginaEntregas(env,
-    [...filtros, '(nf = ? OR pedido_compra = ? OR ordem = ? OR nota_fiscal_explode = ?)'],
-    [...valores, n, n, n, nfTracking(numero)]);
-  if (exata.itens.length || aposData || numero.length < 4) return Response.json(exata);
+  const indexada = await paginaEntregas(env, tabela,
+    [...filtros, '(pedido_compra = ? OR nota_fiscal_explode = ?)'], [...valores, n, nfTracking(numero)]);
+  if (indexada.itens.length || aposData) return Response.json(indexada);
 
-  // 2º: nada exato → busca parcial ("contém"), limitada ao período (ano corrente se não informado)
-  // para não ler a tabela inteira
+  // 2º: número exato na NF Bemol e na ordem (a base geral não tem índice nelas: lê a tabela, ~18 mil linhas)
+  const exata = await paginaEntregas(env, tabela, [...filtros, '(nf = ? OR ordem = ?)'], [...valores, n, n]);
+  if (exata.itens.length || numero.length < 4) return Response.json(exata);
+
+  // 3º: nada exato → busca parcial ("contém"), limitada ao período (ano corrente se não informado)
   const filtrosParcial = [...filtros];
   const valoresParcial = [...valores];
   if (!p.get('de') && !p.get('ate')) {
-    const ano = new Date().getFullYear();
     filtrosParcial.push('dt_pedido BETWEEN ? AND ?');
     valoresParcial.push(`${ano}-01-01`, `${ano}-12-31`);
   }
   const contem = `%${numero}%`;
   filtrosParcial.push('(CAST(pedido_compra AS TEXT) LIKE ? OR CAST(ordem AS TEXT) LIKE ? OR CAST(nf AS TEXT) LIKE ? OR nota_fiscal_explode LIKE ?)');
   valoresParcial.push(contem, contem, contem, contem);
-  return Response.json(await paginaEntregas(env, filtrosParcial, valoresParcial));
+  return Response.json(await paginaEntregas(env, tabela, filtrosParcial, valoresParcial));
 }
 
 // Busca até 3x o tamanho da página e junta as linhas repetidas do mesmo pedido de compra
 // (elas vêm lado a lado por causa da ordenação), sem GROUP BY, que obrigaria a ler tudo.
-async function paginaEntregas(env, filtros, valores) {
+async function paginaEntregas(env, tabela, filtros, valores) {
   const where = filtros.length ? `WHERE ${filtros.join(' AND ')}` : '';
   const limite = ITENS_POR_PAGINA * 3;
   const { results } = await env.DB.prepare(
-    `SELECT * FROM entregas_mkt ${where} ORDER BY dt_pedido DESC, pedido_compra DESC LIMIT ?`
+    `SELECT * FROM ${tabela} ${where} ORDER BY dt_pedido DESC, pedido_compra DESC LIMIT ?`
   ).bind(...valores, limite).all();
 
   const linhas = results || [];
@@ -338,8 +354,6 @@ async function paginaEntregas(env, filtros, valores) {
     itens.push(linha);
   }
   const pagina = itens.slice(0, ITENS_POR_PAGINA);
-  const planilha = await planilhaPorNf(env, pagina.map(l => l.nota_fiscal_explode));
-  for (const linha of pagina) completarComPlanilha(linha, planilha.get(linha.nota_fiscal_explode));
   const ultimo = pagina[pagina.length - 1];
   return {
     itens: pagina,
@@ -354,9 +368,10 @@ const CACHE_FILTROS_MS = 30 * 60 * 1000;
 
 async function filtrosEntregas(env) {
   if (!cacheFiltros || Date.now() - cacheFiltros.em > CACHE_FILTROS_MS) {
+    const tabela = await tabelaPedidos(env);
     const [sellers, status] = await env.DB.batch([
-      env.DB.prepare('SELECT DISTINCT n_fornecedor AS v FROM entregas_mkt WHERE n_fornecedor IS NOT NULL ORDER BY 1'),
-      env.DB.prepare('SELECT DISTINCT no_prazo AS v FROM entregas_mkt WHERE no_prazo IS NOT NULL ORDER BY 1'),
+      env.DB.prepare(`SELECT DISTINCT n_fornecedor AS v FROM ${tabela} WHERE n_fornecedor IS NOT NULL ORDER BY 1`),
+      env.DB.prepare(`SELECT DISTINCT no_prazo AS v FROM ${tabela} WHERE no_prazo IS NOT NULL ORDER BY 1`),
     ]);
     cacheFiltros = {
       em: Date.now(),
@@ -364,50 +379,6 @@ async function filtrosEntregas(env) {
     };
   }
   return Response.json(cacheFiltros.dados);
-}
-
-// ---------- Planilha CONTROLE_AÉREO (tabela controle_aereo) ----------
-// Completa o que falta em entregas_mkt; o banco vale primeiro (decisão da Emilly, 07/10):
-//   Entrega CD = AGENDA CD da planilha, data da coleta e data do CT-e.
-// Uma linha por NF; se a mesma NF aparecer duas vezes (no meio de uma sincronização), vale a mais nova (maior rowid).
-const JUNTA_PLANILHA = `LEFT JOIN controle_aereo c ON c.rowid = (
-  SELECT c2.rowid FROM controle_aereo c2 WHERE c2.nota_fiscal_explode = e.nota_fiscal_explode ORDER BY c2.rowid DESC LIMIT 1)`;
-// LATAM (pedido da Emilly): o embarque é no mesmo dia do CT-e, então data de embarque = DATA CTE da planilha.
-const COLUNAS_COMPLETADAS = {
-  data_coleta: 'COALESCE(e.data_coleta, c.data_coleta)',
-  emissao_cte: 'COALESCE(e.emissao_cte, c.data_cte)',
-  data_embarque: "COALESCE(e.data_embarque, CASE WHEN UPPER(c.transportadora) LIKE '%LATAM%' THEN c.data_cte END)",
-  data_entrega: 'COALESCE(e.data_entrega, c.agenda_cd)',
-};
-const ehLatam = planilha => /LATAM/i.test(planilha?.transportadora || '');
-const colunaCompleta = nome => COLUNAS_COMPLETADAS[nome] || `e.${nome}`;
-
-// Para listas já carregadas (página de pedidos, relatório): busca as NFs na planilha pelo índice
-// idx_controle_nf, em lotes de 90 (o D1 aceita até 100 parâmetros por consulta).
-async function planilhaPorNf(env, nfs) {
-  const unicas = [...new Set(nfs.filter(Boolean))];
-  const mapa = new Map();
-  if (!unicas.length) return mapa;
-  const lotes = [];
-  for (let i = 0; i < unicas.length; i += 90) lotes.push(unicas.slice(i, i + 90));
-  const respostas = await env.DB.batch(lotes.map(lote => env.DB.prepare(
-    `SELECT rowid AS _rid, * FROM controle_aereo WHERE nota_fiscal_explode IN (${lote.map(() => '?').join(', ')})`
-  ).bind(...lote)));
-  for (const { results } of respostas) {
-    for (const linha of results || []) {
-      const atual = mapa.get(linha.nota_fiscal_explode);
-      if (!atual || linha._rid > atual._rid) mapa.set(linha.nota_fiscal_explode, linha);
-    }
-  }
-  return mapa;
-}
-
-function completarComPlanilha(linha, planilha) {
-  if (!planilha) return;
-  linha.data_coleta = linha.data_coleta || planilha.data_coleta;
-  linha.emissao_cte = linha.emissao_cte || planilha.data_cte;
-  if (ehLatam(planilha)) linha.data_embarque = linha.data_embarque || planilha.data_cte;
-  linha.data_entrega = linha.data_entrega || planilha.agenda_cd;
 }
 
 // Indicadores por seller e mês (a tela soma os grupos para os totais).
@@ -424,29 +395,28 @@ async function indicadores(env, p) {
   if (de > ate) return erro(400, 'A data inicial é maior que a final');
   const seller = p.get('seller') || '';
 
-  const chave = JSON.stringify([de, ate, seller]);
+  const tabela = await tabelaPedidos(env);
+  const chave = JSON.stringify([tabela, de, ate, seller]);
   const guardado = cacheIndicadores.get(chave);
   if (guardado && Date.now() - guardado.em < CACHE_FILTROS_MS) return Response.json(guardado.dados);
 
-  const filtros = ['e.dt_pedido BETWEEN ? AND ?', 'e.pedido IS NOT NULL'];
+  const filtros = ['dt_pedido BETWEEN ? AND ?', 'pedido IS NOT NULL'];
   const valores = [de, ate];
   if (seller) {
-    filtros.push('e.n_fornecedor = ?');
+    filtros.push('n_fornecedor = ?');
     valores.push(seller);
   }
 
-  // Prazos em dias só contam quando as duas datas existem e a diferença não é negativa.
-  // Coleta → entrega CD usa as datas completadas pela planilha (JUNTA_PLANILHA).
+  // Prazos em dias só contam quando as duas datas existem e a diferença não é negativa
   const { results } = await env.DB.prepare(
     `WITH base AS (
-       SELECT e.pedido,
-              MAX(e.n_fornecedor) AS seller, MAX(e.dt_pedido) AS dt_pedido, UPPER(TRIM(MAX(e.no_prazo))) AS status,
-              julianday(MAX(e.dt_faturamento)) - julianday(MAX(e.dt_pedido)) AS d_fat,
-              julianday(MAX(e.dt_entrega))     - julianday(MAX(e.dt_pedido)) AS d_ent,
-              julianday(MAX(${colunaCompleta('data_entrega')})) - julianday(MAX(${colunaCompleta('data_coleta')})) AS d_cd
-       FROM entregas_mkt e ${JUNTA_PLANILHA}
-       WHERE ${filtros.join(' AND ')}
-       GROUP BY e.pedido
+       SELECT pedido,
+              MAX(n_fornecedor) AS seller, MAX(dt_pedido) AS dt_pedido, UPPER(TRIM(MAX(no_prazo))) AS status,
+              julianday(MAX(dt_faturamento)) - julianday(MAX(dt_pedido)) AS d_fat,
+              julianday(MAX(dt_entrega))     - julianday(MAX(dt_pedido)) AS d_ent,
+              julianday(MAX(data_entrega))   - julianday(MAX(data_coleta)) AS d_cd
+       FROM ${tabela} WHERE ${filtros.join(' AND ')}
+       GROUP BY pedido
      )
      SELECT seller, substr(dt_pedido, 1, 7) AS mes, COUNT(*) AS pedidos,
             SUM(status = 'NO PRAZO') AS no_prazo,
@@ -492,14 +462,15 @@ async function leadTimeSemanal(env, p) {
 
   const seller = p.get('seller') || '';
   const uf = p.get('uf') || '';
-  const chave = JSON.stringify([inicio, seller, uf]);
+  const tabela = await tabelaPedidos(env);
+  const chave = JSON.stringify([tabela, inicio, seller, uf]);
   const guardado = cacheLeadTime.get(chave);
   if (guardado && Date.now() - guardado.em < CACHE_FILTROS_MS) return Response.json(guardado.dados);
 
-  const filtros = ['e.dt_pedido BETWEEN ? AND ?', 'e.pedido IS NOT NULL'];
+  const filtros = ['dt_pedido BETWEEN ? AND ?', 'pedido IS NOT NULL'];
   const valores = [inicio, ultimo];
-  if (seller) { filtros.push('e.n_fornecedor = ?'); valores.push(seller); }
-  if (uf) { filtros.push('e.uf = ?'); valores.push(uf); }
+  if (seller) { filtros.push('n_fornecedor = ?'); valores.push(seller); }
+  if (uf) { filtros.push('uf = ?'); valores.push(uf); }
 
   const colunas = [...new Set(ETAPAS_LEAD_TIME.flatMap(([, de, ate]) => [de, ate]))];
   const medias = ETAPAS_LEAD_TIME.map(([nome, de, ate]) =>
@@ -509,17 +480,16 @@ async function leadTimeSemanal(env, p) {
   const [semanas, ufs] = await env.DB.batch([
     env.DB.prepare(
       `WITH base AS (
-         SELECT ${colunas.map(c => `MAX(${colunaCompleta(c)}) AS ${c}`).join(', ')}
-         FROM entregas_mkt e ${JUNTA_PLANILHA}
-         WHERE ${filtros.join(' AND ')}
-         GROUP BY e.pedido
+         SELECT ${colunas.map(c => `MAX(${c}) AS ${c}`).join(', ')}
+         FROM ${tabela} WHERE ${filtros.join(' AND ')}
+         GROUP BY pedido
        )
        SELECT date(dt_pedido, '-' || ((CAST(strftime('%w', dt_pedido) AS INTEGER) + 6) % 7) || ' days') AS semana,
               COUNT(*) AS pedidos, ${medias}
        FROM base GROUP BY semana ORDER BY semana`
     ).bind(...valores),
     env.DB.prepare(
-      `SELECT DISTINCT uf FROM entregas_mkt
+      `SELECT DISTINCT uf FROM ${tabela}
        WHERE dt_pedido BETWEEN ? AND ? ${seller ? 'AND n_fornecedor = ?' : ''} AND uf IS NOT NULL AND TRIM(uf) <> ''
        ORDER BY uf`
     ).bind(inicio, ultimo, ...(seller ? [seller] : [])),
@@ -535,12 +505,16 @@ async function leadTimeSemanal(env, p) {
   return Response.json(dados);
 }
 
-// Relatório para baixar: todas as colunas de entregas_mkt + transportadora e CT-e do tracking (pela NF).
+// Relatório para baixar: todas as colunas da base geral (as 3 bases unificadas, com as colunas da planilha).
 // A tela pede em partes de 1.000 linhas e monta o arquivo. O cursor é o rowid: cada parte continua de onde a
-// anterior parou, então o download inteiro lê a tabela uma vez só (regra 12), e cada resposta fica pequena.
+// anterior parou, então o download inteiro lê a tabela uma vez só (~1 linha lida por linha do relatório).
 const LINHAS_POR_PARTE_RELATORIO = 1000;
+const SEP_TRANSPORTE = '\x1f'; // base_geral.transportes = "transportadora␟cte,transportadora␟cte,…"
 
 async function relatorio(env, p) {
+  if (await tabelaPedidos(env) !== 'base_geral') {
+    return erro(503, 'O relatório volta quando a base geral terminar a primeira carga (Job do Databricks, 8h).');
+  }
   const ano = new Date().getFullYear();
   const de = p.get('de') || `${ano}-01-01`;
   const ate = p.get('ate') || `${ano}-12-31`;
@@ -556,77 +530,41 @@ async function relatorio(env, p) {
     filtros.push('e.n_fornecedor = ?');
     valores.push(seller);
   }
-  // Só entram as combinações transportadora × seller de REGRAS_RELATORIO ("Todas" = todas as regras)
+  // Só entram as combinações transportadora × seller de REGRAS_RELATORIO ("Todas" = todas as regras),
+  // procurando em base_geral.transportes (tracking + planilha, já juntados por NF + seller pelo Job)
   const transportadora = p.get('transportadora');
   const regras = transportadora ? REGRAS_RELATORIO.filter(r => r.valor === transportadora) : REGRAS_RELATORIO;
   if (!regras.length) return erro(400, 'Transportadora não disponível no relatório');
-  // Cada regra vale no tracking (tracking_aereo.transportador) e/ou na planilha (controle_aereo.transportadora)
-  const condicao = (lista, coluna) => `(${lista.map(r =>
-    `(e.n_fornecedor IN (${r.sellers.map(() => '?').join(', ')}) AND ${coluna} LIKE ?)`).join(' OR ')})`;
-  const valoresDe = lista => lista.flatMap(r => [...r.sellers, r.padrao]);
-  const noTracking = regras.filter(r => r.fontes.includes('tracking'));
-  const naPlanilha = regras.filter(r => r.fontes.includes('planilha'));
-  // Transportadora e CT-e: só os itens da NF que passam na regra (uma NF pode ter itens de transportadoras
-  // diferentes), pelo índice idx_tracking_nf. Uma NF da Vitrola tem dezenas de itens, então os itens são lidos
-  // UMA vez por pedido: a mesma subconsulta traz "transportador␟cte" (separados aqui) e decide se o pedido entra
-  // (_tc e _pc nulos = nenhum item da regra). Com EXISTS + uma subconsulta por coluna, as leituras triplicavam.
-  // _pc = o mesmo na planilha (idx_controle_nf), só quando alguma regra escolhida usa a planilha (hoje, LATAM).
-  const subTracking = noTracking.length
-    ? `(SELECT group_concat(DISTINCT t.transportador || char(31) || IFNULL(t.cte, '')) FROM tracking_aereo t
-        WHERE t.nota_fiscal_explode = e.nota_fiscal_explode AND ${condicao(noTracking, 't.transportador')})`
-    : 'NULL';
-  const subPlanilha = naPlanilha.length
-    ? `(SELECT group_concat(DISTINCT c.transportadora || char(31) || IFNULL(c.cte, '')) FROM controle_aereo c
-        WHERE c.nota_fiscal_explode = e.nota_fiscal_explode AND ${condicao(naPlanilha, 'c.transportadora')})`
-    : 'NULL';
-  const { results } = await env.DB.prepare(
-    `SELECT * FROM (
-       SELECT e.rowid AS _id,
-              e.pedido_compra, e.pedido, e.ordem, e.n_fornecedor, e.fornecedor, e.nome_forn, e.centro, e.centro_expedicao,
-              e.dt_pedido, e.dt_liberacao, e.nota_fiscal_explode, e.emissao, e.data_coleta, e.emissao_cte, e.data_embarque,
-              e.data_entrega, e.dt_faturamento, e.nf, e.dt_entrega, e.no_prazo, e.cidade, e.bairro, e.zona, e.uf,
-              e.documento_compras, e.numero_documento_nove_posicoes, e.origem,
-              ${subTracking} AS _tc, ${subPlanilha} AS _pc
-       FROM entregas_mkt e
-       WHERE ${filtros.join(' AND ')}
-       ORDER BY e.rowid
-     ) WHERE _tc IS NOT NULL OR _pc IS NOT NULL LIMIT ?`
-  ).bind(...valoresDe(noTracking), ...valoresDe(naPlanilha), ...valores, LINHAS_POR_PARTE_RELATORIO).all();
+  filtros.push(`(${regras.map(r =>
+    `(e.n_fornecedor IN (${r.sellers.map(() => '?').join(', ')}) AND e.transportes LIKE ?)`).join(' OR ')})`);
+  valores.push(...regras.flatMap(r => [...r.sellers, `%${r.contem}%`]));
 
-  const itens = (results || []).map(({ _tc, _pc, ...linha }) => {
-    const pares = [_tc, _pc].filter(Boolean).join(',').split(',').map(par => par.split('\x1f'));
+  const { results } = await env.DB.prepare(
+    `SELECT e.rowid AS _id, e.* FROM base_geral e WHERE ${filtros.join(' AND ')} ORDER BY e.rowid LIMIT ?`
+  ).bind(...valores, LINHAS_POR_PARTE_RELATORIO).all();
+
+  // Transportadora e CT-e do relatório: só os da regra que vale para o seller da linha
+  const itens = (results || []).map(({ row_hash, transportes, ...linha }) => {
+    const daRegra = regras.filter(r => r.sellers.includes(linha.n_fornecedor));
+    const pares = String(transportes || '').split(',').map(par => par.split(SEP_TRANSPORTE))
+      .filter(([transp]) => transp && daRegra.some(r => transp.toUpperCase().includes(r.contem)));
     linha.transportador = [...new Set(pares.map(([transp]) => transp))].join(', ');
     linha.cte = [...new Set(pares.map(([, cte]) => cte).filter(Boolean))].join(', ');
     return linha;
   });
-
-  // Planilha CONTROLE_AÉREO: completa as datas vazias e acrescenta as colunas dela (prefixo pl_)
-  const planilha = await planilhaPorNf(env, itens.map(l => l.nota_fiscal_explode));
-  for (const linha of itens) {
-    const pl = planilha.get(linha.nota_fiscal_explode);
-    completarComPlanilha(linha, pl);
-    for (const campo of CAMPOS_PLANILHA_RELATORIO) linha[`pl_${campo}`] = pl ? pl[campo] : null;
-  }
   return Response.json({
     itens,
     proximo: itens.length === LINHAS_POR_PARTE_RELATORIO ? itens[itens.length - 1]._id : null,
   });
 }
 
-const CAMPOS_PLANILHA_RELATORIO = [
-  'ncoleta', 'transportadora', 'cte', 'origem', 'destino', 'volumes', 'peso', 'valor_nota', 'valor_frete',
-  'data_coleta', 'data_cte', 'previsao_entrega', 'chegada_mao', 'agenda_cd', 'meta', 'lead_time', 'dias_atraso', 'status',
-];
-
 // Transportadoras do relatório e para quais sellers cada uma vale (pedido da Emilly, 07/10):
-// GRU - KM CARGO só Brascol; LLS só Vitrola e Tramontina; LATAM vem da planilha CONTROLE_AÉREO (o tracking
-// ainda não tem LATAM; se passar a ter, entra também).
-// padrao = LIKE na transportadora; fontes = onde procurar (tracking_aereo e/ou controle_aereo);
-// sellers = valores de entregas_mkt.n_fornecedor.
+// GRU - KM CARGO só Brascol; LLS só Vitrola e Tramontina; LATAM (vem da planilha CONTROLE_AÉREO).
+// contem = texto procurado no nome da transportadora (tracking ou planilha); sellers = valores de n_fornecedor.
 const REGRAS_RELATORIO = [
-  { valor: 'GRU', rotulo: 'GRU - KM CARGO (Brascol)', padrao: 'GRU - KM CARGO%', sellers: ['Brascol'], fontes: ['tracking'] },
-  { valor: 'LLS', rotulo: 'LLS TRANSPORTE (Vitrola e Tramontina)', padrao: 'LLS TRANSPORTE%', sellers: ['Vitrola', 'Tramontina'], fontes: ['tracking'] },
-  { valor: 'LATAM', rotulo: 'LATAM', padrao: '%LATAM%', sellers: ['Brascol', 'Vitrola', 'Tramontina'], fontes: ['tracking', 'planilha'] },
+  { valor: 'GRU', rotulo: 'GRU - KM CARGO (Brascol)', contem: 'GRU - KM CARGO', sellers: ['Brascol'] },
+  { valor: 'LLS', rotulo: 'LLS TRANSPORTE (Vitrola e Tramontina)', contem: 'LLS TRANSPORTE', sellers: ['Vitrola', 'Tramontina'] },
+  { valor: 'LATAM', rotulo: 'LATAM', contem: 'LATAM', sellers: ['Brascol', 'Vitrola', 'Tramontina'] },
 ];
 
 function filtrosRelatorio() {
