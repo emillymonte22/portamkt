@@ -556,12 +556,25 @@ async function relatorio(env, p) {
   const transportadora = p.get('transportadora');
   const regras = transportadora ? REGRAS_RELATORIO.filter(r => r.valor === transportadora) : REGRAS_RELATORIO;
   if (!regras.length) return erro(400, 'Transportadora não disponível no relatório');
-  const regraSql = `(${regras.map(r => `(e.n_fornecedor IN (${r.sellers.map(() => '?').join(', ')}) AND t.transportador LIKE ?)`).join(' OR ')})`;
-  const regraValores = regras.flatMap(r => [...r.sellers, r.padrao]);
+  // Cada regra vale no tracking (tracking_aereo.transportador) e/ou na planilha (controle_aereo.transportadora)
+  const condicao = (lista, coluna) => `(${lista.map(r =>
+    `(e.n_fornecedor IN (${r.sellers.map(() => '?').join(', ')}) AND ${coluna} LIKE ?)`).join(' OR ')})`;
+  const valoresDe = lista => lista.flatMap(r => [...r.sellers, r.padrao]);
+  const noTracking = regras.filter(r => r.fontes.includes('tracking'));
+  const naPlanilha = regras.filter(r => r.fontes.includes('planilha'));
   // Transportadora e CT-e: só os itens da NF que passam na regra (uma NF pode ter itens de transportadoras
   // diferentes), pelo índice idx_tracking_nf. Uma NF da Vitrola tem dezenas de itens, então os itens são lidos
   // UMA vez por pedido: a mesma subconsulta traz "transportador␟cte" (separados aqui) e decide se o pedido entra
-  // (_tc nulo = nenhum item da regra). Com EXISTS + uma subconsulta por coluna, as leituras triplicavam.
+  // (_tc e _pc nulos = nenhum item da regra). Com EXISTS + uma subconsulta por coluna, as leituras triplicavam.
+  // _pc = o mesmo na planilha (idx_controle_nf), só quando alguma regra escolhida usa a planilha (hoje, LATAM).
+  const subTracking = noTracking.length
+    ? `(SELECT group_concat(DISTINCT t.transportador || char(31) || IFNULL(t.cte, '')) FROM tracking_aereo t
+        WHERE t.nota_fiscal_explode = e.nota_fiscal_explode AND ${condicao(noTracking, 't.transportador')})`
+    : 'NULL';
+  const subPlanilha = naPlanilha.length
+    ? `(SELECT group_concat(DISTINCT c.transportadora || char(31) || IFNULL(c.cte, '')) FROM controle_aereo c
+        WHERE c.nota_fiscal_explode = e.nota_fiscal_explode AND ${condicao(naPlanilha, 'c.transportadora')})`
+    : 'NULL';
   const { results } = await env.DB.prepare(
     `SELECT * FROM (
        SELECT e.rowid AS _id,
@@ -569,16 +582,15 @@ async function relatorio(env, p) {
               e.dt_pedido, e.dt_liberacao, e.nota_fiscal_explode, e.emissao, e.data_coleta, e.emissao_cte, e.data_embarque,
               e.data_entrega, e.dt_faturamento, e.nf, e.dt_entrega, e.no_prazo, e.cidade, e.bairro, e.zona, e.uf,
               e.documento_compras, e.numero_documento_nove_posicoes, e.origem,
-              (SELECT group_concat(DISTINCT t.transportador || char(31) || IFNULL(t.cte, '')) FROM tracking_aereo t
-               WHERE t.nota_fiscal_explode = e.nota_fiscal_explode AND ${regraSql}) AS _tc
+              ${subTracking} AS _tc, ${subPlanilha} AS _pc
        FROM entregas_mkt e
        WHERE ${filtros.join(' AND ')}
        ORDER BY e.rowid
-     ) WHERE _tc IS NOT NULL LIMIT ?`
-  ).bind(...regraValores, ...valores, LINHAS_POR_PARTE_RELATORIO).all();
+     ) WHERE _tc IS NOT NULL OR _pc IS NOT NULL LIMIT ?`
+  ).bind(...valoresDe(noTracking), ...valoresDe(naPlanilha), ...valores, LINHAS_POR_PARTE_RELATORIO).all();
 
-  const itens = (results || []).map(({ _tc, ...linha }) => {
-    const pares = _tc.split(',').map(par => par.split('\x1f'));
+  const itens = (results || []).map(({ _tc, _pc, ...linha }) => {
+    const pares = [_tc, _pc].filter(Boolean).join(',').split(',').map(par => par.split('\x1f'));
     linha.transportador = [...new Set(pares.map(([transp]) => transp))].join(', ');
     linha.cte = [...new Set(pares.map(([, cte]) => cte).filter(Boolean))].join(', ');
     return linha;
@@ -603,12 +615,14 @@ const CAMPOS_PLANILHA_RELATORIO = [
 ];
 
 // Transportadoras do relatório e para quais sellers cada uma vale (pedido da Emilly, 07/10):
-// GRU - KM CARGO só Brascol; LLS só Vitrola e Tramontina; LATAM fica disponível mesmo sem dados no tracking ainda.
-// padrao = LIKE em tracking_aereo.transportador; sellers = valores de entregas_mkt.n_fornecedor.
+// GRU - KM CARGO só Brascol; LLS só Vitrola e Tramontina; LATAM vem da planilha CONTROLE_AÉREO (o tracking
+// ainda não tem LATAM; se passar a ter, entra também).
+// padrao = LIKE na transportadora; fontes = onde procurar (tracking_aereo e/ou controle_aereo);
+// sellers = valores de entregas_mkt.n_fornecedor.
 const REGRAS_RELATORIO = [
-  { valor: 'GRU', rotulo: 'GRU - KM CARGO (Brascol)', padrao: 'GRU - KM CARGO%', sellers: ['Brascol'] },
-  { valor: 'LLS', rotulo: 'LLS TRANSPORTE (Vitrola e Tramontina)', padrao: 'LLS TRANSPORTE%', sellers: ['Vitrola', 'Tramontina'] },
-  { valor: 'LATAM', rotulo: 'LATAM', padrao: '%LATAM%', sellers: ['Brascol', 'Vitrola', 'Tramontina'] },
+  { valor: 'GRU', rotulo: 'GRU - KM CARGO (Brascol)', padrao: 'GRU - KM CARGO%', sellers: ['Brascol'], fontes: ['tracking'] },
+  { valor: 'LLS', rotulo: 'LLS TRANSPORTE (Vitrola e Tramontina)', padrao: 'LLS TRANSPORTE%', sellers: ['Vitrola', 'Tramontina'], fontes: ['tracking'] },
+  { valor: 'LATAM', rotulo: 'LATAM', padrao: '%LATAM%', sellers: ['Brascol', 'Vitrola', 'Tramontina'], fontes: ['tracking', 'planilha'] },
 ];
 
 function filtrosRelatorio() {
