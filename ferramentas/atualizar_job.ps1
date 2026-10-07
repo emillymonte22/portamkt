@@ -1,6 +1,6 @@
 ﻿# Reenvia databricks/sync_d1.py ao Databricks (notebook do Job) e roda o Job uma vez.
 # Uso (na pasta do projeto):  powershell -ExecutionPolicy Bypass -File ferramentas\atualizar_job.ps1
-#   -SemRodar: só envia o notebook (o Job roda no horário dele, 8h de Manaus)
+#   -SemRodar: só envia o notebook (o Job roda no horário dele, 12h de Manaus)
 # Precisa do Databricks CLI logado (perfil DEFAULT, usuário emillymonte@bemol.com.br).
 param([switch]$SemRodar)
 $ErrorActionPreference = 'Stop'
