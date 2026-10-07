@@ -346,7 +346,7 @@
                 <div id="conteudo-relatorios" class="space-y-6 hidden">
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <h3 class="text-base font-bold text-slate-800">Relatório de Pedidos Marketplace</h3>
-                        <p class="text-xs text-slate-500 mb-4">Pedidos com NF transportada pela LLS Transporte · todas as colunas, com o CT-e da LLS · arquivo Excel (.xlsx)</p>
+                        <p class="text-xs text-slate-500 mb-4">Todas as colunas dos pedidos, com transportadora e CT-e do tracking · arquivo Excel (.xlsx)</p>
                         <form onsubmit="baixarRelatorio(event)" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
                             <div>
                                 <label class="block text-xs font-semibold text-slate-600 mb-1">Pedido de</label>
@@ -365,7 +365,7 @@
                             <div>
                                 <label class="block text-xs font-semibold text-slate-600 mb-1">Transportadora</label>
                                 <select id="rel_transportadora" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
-                                    <option value="">LLS TRANSPORTE</option>
+                                    <option value="">Todas</option>
                                 </select>
                             </div>
                             <div>
@@ -883,8 +883,7 @@
         async function carregarTransportadoras() {
             try {
                 const { transportadoras } = await api('/api/relatorio/filtros');
-                // Só as transportadoras liberadas para o relatório (hoje, só a LLS); sem opção "Todas"
-                document.getElementById('rel_transportadora').innerHTML =
+                document.getElementById('rel_transportadora').innerHTML = '<option value="">Todas</option>' +
                     transportadoras.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
                 transportadorasCarregadas = true;
             } catch (err) { console.error(err); }
