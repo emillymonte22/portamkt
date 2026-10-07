@@ -346,7 +346,7 @@
                 <div id="conteudo-relatorios" class="space-y-6 hidden">
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <h3 class="text-base font-bold text-slate-800">Relatório de Pedidos Marketplace</h3>
-                        <p class="text-xs text-slate-500 mb-4">Todas as colunas dos pedidos, com transportadora e CT-e do tracking · arquivo Excel (.xlsx)</p>
+                        <p class="text-xs text-slate-500 mb-4">GRU - KM CARGO para Brascol · LLS para Vitrola e Tramontina · LATAM · todas as colunas dos pedidos, com transportadora e CT-e · arquivo Excel (.xlsx)</p>
                         <form onsubmit="baixarRelatorio(event)" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
                             <div>
                                 <label class="block text-xs font-semibold text-slate-600 mb-1">Pedido de</label>
@@ -884,7 +884,7 @@
             try {
                 const { transportadoras } = await api('/api/relatorio/filtros');
                 document.getElementById('rel_transportadora').innerHTML = '<option value="">Todas</option>' +
-                    transportadoras.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+                    transportadoras.map(t => `<option value="${esc(t.valor)}">${esc(t.rotulo)}</option>`).join('');
                 transportadorasCarregadas = true;
             } catch (err) { console.error(err); }
         }
