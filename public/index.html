@@ -342,6 +342,41 @@
                     </div>
                 </div>
 
+                <!-- CONTEÚDO: EXTRAIR RELATÓRIO -->
+                <div id="conteudo-relatorios" class="space-y-6 hidden">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <h3 class="text-base font-bold text-slate-800">Relatório de Pedidos Marketplace</h3>
+                        <p class="text-xs text-slate-500 mb-4">Todas as colunas dos pedidos, com transportadora e CT-e do tracking · arquivo Excel (.xlsx)</p>
+                        <form onsubmit="baixarRelatorio(event)" class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Pedido de</label>
+                                <input type="date" id="rel_de" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Até</label>
+                                <input type="date" id="rel_ate" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Seller</label>
+                                <select id="rel_seller" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                                    <option value="">Todos</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Transportadora</label>
+                                <select id="rel_transportadora" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                                    <option value="">Todas</option>
+                                </select>
+                            </div>
+                            <div>
+                                <button type="submit" id="rel-botao" class="w-full bg-[#003366] hover:bg-sky-800 text-white font-semibold px-4 py-2 rounded-lg text-sm transition shadow-sm disabled:opacity-50">Baixar relatório</button>
+                            </div>
+                        </form>
+                        <p class="text-[11px] text-slate-400 mt-3">Sem data, vale o ano corrente.</p>
+                        <p id="rel-status" class="text-sm text-slate-600 mt-2"></p>
+                    </div>
+                </div>
+
                 <!-- CONTEÚDO: CD — DISPONÍVEL PARA COLETA (LATAM) -->
                 <div id="conteudo-cd-coleta" class="space-y-6 hidden">
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
@@ -519,7 +554,7 @@
                 el.classList.remove(...cfg.ativo.split(' '), ...cfg.inativo.split(' '));
                 el.classList.add(...(ativo ? cfg.ativo : cfg.inativo).split(' '));
             }
-            const especificas = ['consultas', 'indicadores', 'cd-coleta', 'admin-painel'];
+            const especificas = ['consultas', 'indicadores', 'relatorios', 'cd-coleta', 'admin-painel'];
             for (const id of especificas) {
                 const el = document.getElementById('conteudo-' + id);
                 if (el) el.classList.toggle('hidden', id !== aba);
@@ -534,6 +569,7 @@
 
             // Indicadores carregam na primeira abertura; depois, só pelo botão Atualizar (economiza leituras do D1)
             if (aba === 'indicadores' && !indicadoresCarregados) carregarIndicadores();
+            if (aba === 'relatorios' && !transportadorasCarregadas) carregarTransportadoras();
             if (aba === 'cd-coleta') carregarCdLatam();
             if (aba === 'admin-painel') carregarAdminSinalizacao();
         }
@@ -551,10 +587,12 @@
                 const opcoesSeller = '<option value="">Todos</option>' +
                     sellers.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
                 document.getElementById('f_seller').innerHTML = opcoesSeller;
-                const indSeller = document.getElementById('ind_seller');
-                const escolhido = indSeller.value;
-                indSeller.innerHTML = opcoesSeller;
-                indSeller.value = escolhido;
+                for (const id of ['ind_seller', 'rel_seller']) {
+                    const select = document.getElementById(id);
+                    const escolhido = select.value;
+                    select.innerHTML = opcoesSeller;
+                    select.value = escolhido;
+                }
                 document.getElementById('f_status').innerHTML = '<option value="">Todos</option>' +
                     status.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
             } catch (err) { console.error(err); }
@@ -819,6 +857,109 @@
                     <td class="p-3 text-right">${dias(s.soma_fat, s.n_fat)}</td>
                     <td class="p-3 text-right">${dias(s.soma_ent, s.n_ent)}</td>
                 </tr>`).join('');
+        }
+
+        // ---------- Extrair Relatório ----------
+        let transportadorasCarregadas = false;
+
+        // [coluna da API, título no Excel, tipo]; 'data' sai como DD/MM/AAAA e 'texto' evita o Excel
+        // transformar números longos (pedido de compra, NF) em notação científica
+        const COLUNAS_RELATORIO = [
+            ['pedido_compra', 'PEDIDO_COMPRA', 'texto'], ['pedido', 'PEDIDO', 'texto'], ['ordem', 'ORDEM', 'texto'],
+            ['n_fornecedor', 'N_FORNECEDOR'], ['fornecedor', 'FORNECEDOR', 'texto'], ['nome_forn', 'NOME_FORN'],
+            ['centro', 'CENTRO'], ['centro_expedicao', 'CENTRO_EXPEDICAO'],
+            ['dt_pedido', 'DT_PEDIDO', 'data'], ['dt_liberacao', 'DT_LIBERACAO', 'data'],
+            ['nota_fiscal_explode', 'NOTA SELLER', 'texto'], ['emissao', 'DT_NF_SELLER', 'data'],
+            ['transportador', 'TRANSPORTADORA'], ['cte', 'CT-E', 'texto'],
+            ['data_coleta', 'DATA_COLETA', 'data'], ['emissao_cte', 'EMISSAO_CTE', 'data'],
+            ['data_embarque', 'DATA_EMBARQUE', 'data'], ['data_entrega', 'ENTREGA CD', 'data'],
+            ['dt_faturamento', 'DT_FATURAMENTO_CD', 'data'], ['nf', 'NOTA BEMOL', 'texto'],
+            ['dt_entrega', 'DT_ENTREGA_CLIENTE', 'data'], ['no_prazo', 'STATUS'],
+            ['bairro', 'BAIRRO'], ['cidade', 'CIDADE'], ['zona', 'ZONA'], ['uf', 'UF'],
+            ['documento_compras', 'DOCUMENTO_COMPRAS', 'texto'], ['numero_documento_nove_posicoes', 'DOCUMENTO_9_POSICOES', 'texto'],
+            ['origem', 'ORIGEM'],
+        ];
+
+        async function carregarTransportadoras() {
+            try {
+                const { transportadoras } = await api('/api/relatorio/filtros');
+                document.getElementById('rel_transportadora').innerHTML = '<option value="">Todas</option>' +
+                    transportadoras.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('');
+                transportadorasCarregadas = true;
+            } catch (err) { console.error(err); }
+        }
+
+        // SheetJS (gera o .xlsx no navegador) só é baixado na primeira vez que alguém pede um relatório
+        let carregandoXlsx = null;
+        function carregarXlsx() {
+            if (window.XLSX) return Promise.resolve();
+            if (!carregandoXlsx) {
+                carregandoXlsx = new Promise((ok, falha) => {
+                    const s = document.createElement('script');
+                    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+                    s.integrity = 'sha512-r22gChDnGvBylk90+2e/ycr3RVrDi8DIOkIGNhJlKfuyQM4tIRAI062MaV8sfjQKYVGjOBaZBOA87z+IhZE9DA==';
+                    s.crossOrigin = 'anonymous';
+                    s.onload = ok;
+                    s.onerror = () => { carregandoXlsx = null; falha(new Error('Não foi possível carregar o gerador de Excel')); };
+                    document.head.appendChild(s);
+                });
+            }
+            return carregandoXlsx;
+        }
+
+        function valorRelatorio(v, tipo) {
+            if (v === null || v === undefined || String(v).trim() === '') return '';
+            if (tipo === 'data') return formatarData(v);
+            return tipo === 'texto' ? String(v) : v;
+        }
+
+        async function baixarRelatorio(e) {
+            e.preventDefault();
+            const botao = document.getElementById('rel-botao');
+            const status = document.getElementById('rel-status');
+            const params = new URLSearchParams();
+            const campos = { de: 'rel_de', ate: 'rel_ate', seller: 'rel_seller', transportadora: 'rel_transportadora' };
+            for (const [param, id] of Object.entries(campos)) {
+                const v = document.getElementById(id).value.trim();
+                if (v) params.set(param, v);
+            }
+
+            botao.disabled = true;
+            status.className = 'text-sm text-slate-600 mt-2';
+            try {
+                const xlsxPronto = carregarXlsx();
+                const linhas = [];
+                let apos = 0;
+                do {
+                    status.textContent = `A buscar dados... ${numero(linhas.length)} linhas`;
+                    params.set('apos_id', apos);
+                    const parte = await api('/api/relatorio?' + params);
+                    linhas.push(...parte.itens);
+                    apos = parte.proximo;
+                } while (apos);
+
+                if (!linhas.length) {
+                    status.textContent = 'Nenhum pedido encontrado com esses filtros.';
+                    return;
+                }
+                status.textContent = `A gerar o Excel com ${numero(linhas.length)} linhas...`;
+                await xlsxPronto;
+                const dados = [COLUNAS_RELATORIO.map(c => c[1])].concat(
+                    linhas.map(l => COLUNAS_RELATORIO.map(([campo, , tipo]) => valorRelatorio(l[campo], tipo))));
+                const planilha = XLSX.utils.aoa_to_sheet(dados);
+                planilha['!cols'] = COLUNAS_RELATORIO.map(c => ({ wch: Math.max(12, c[1].length + 2) }));
+                planilha['!autofilter'] = { ref: planilha['!ref'] };
+                const livro = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(livro, planilha, 'Pedidos');
+                const nome = ['relatorio_pedidos', params.get('de'), params.get('ate')].filter(Boolean).join('_');
+                XLSX.writeFile(livro, `${nome}.xlsx`);
+                status.textContent = `Relatório baixado: ${numero(linhas.length)} linhas.`;
+            } catch (err) {
+                status.className = 'text-sm text-red-500 mt-2';
+                status.textContent = err.message;
+            } finally {
+                botao.disabled = false;
+            }
         }
 
         function toggleFormAgendamento() {

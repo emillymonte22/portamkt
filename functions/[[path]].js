@@ -56,6 +56,8 @@ export async function onRequest(context) {
     if (path === '/api/entregas' && request.method === 'GET') return await listarEntregas(env, url.searchParams);
     if (path === '/api/entregas/filtros' && request.method === 'GET') return await filtrosEntregas(env);
     if (path === '/api/indicadores' && request.method === 'GET') return await indicadores(env, url.searchParams);
+    if (path === '/api/relatorio' && request.method === 'GET') return await relatorio(env, url.searchParams);
+    if (path === '/api/relatorio/filtros' && request.method === 'GET') return await filtrosRelatorio(env);
     if (path === '/api/tracking' && request.method === 'GET') return await listarTracking(env, url.searchParams);
     if (path === '/api/sync-status' && request.method === 'GET') return await statusSync(env);
 
@@ -412,6 +414,67 @@ async function indicadores(env, p) {
   if (cacheIndicadores.size > 50) cacheIndicadores.clear();
   cacheIndicadores.set(chave, { em: Date.now(), dados });
   return Response.json(dados);
+}
+
+// Relatório para baixar: todas as colunas de entregas_mkt + transportadora e CT-e do tracking (pela NF).
+// A tela pede em partes de 1.000 linhas e monta o arquivo. O cursor é o rowid: cada parte continua de onde a
+// anterior parou, então o download inteiro lê a tabela uma vez só (regra 12), e cada resposta fica pequena.
+const LINHAS_POR_PARTE_RELATORIO = 1000;
+
+async function relatorio(env, p) {
+  const ano = new Date().getFullYear();
+  const de = p.get('de') || `${ano}-01-01`;
+  const ate = p.get('ate') || `${ano}-12-31`;
+  if (![de, ate].every(d => /^\d{4}-\d{2}-\d{2}$/.test(d))) return erro(400, 'Datas inválidas');
+  if (de > ate) return erro(400, 'A data inicial é maior que a final');
+
+  // O "+" impede o SQLite de usar o índice de data aqui: com ele, cada parte releria o período inteiro para
+  // ordenar por rowid; sem ele, percorre a tabela em ordem de rowid e para ao juntar 1.000 linhas.
+  const filtros = ['+e.dt_pedido BETWEEN ? AND ?', 'e.rowid > ?'];
+  const valores = [de, ate, Number(p.get('apos_id')) || 0];
+  const seller = p.get('seller');
+  if (seller) {
+    filtros.push('e.n_fornecedor = ?');
+    valores.push(seller);
+  }
+  const transportadora = p.get('transportadora');
+  if (transportadora) {
+    filtros.push('EXISTS (SELECT 1 FROM tracking_aereo t WHERE t.nota_fiscal_explode = e.nota_fiscal_explode AND t.transportador = ?)');
+    valores.push(transportadora);
+  }
+
+  // Transportadora e CT-e: todos os diferentes nos itens da mesma NF no tracking (uma NF pode ter itens com
+  // transportadoras diferentes), separados por vírgula; busca pelo índice idx_tracking_nf
+  const { results } = await env.DB.prepare(
+    `SELECT e.rowid AS _id,
+            e.pedido_compra, e.pedido, e.ordem, e.n_fornecedor, e.fornecedor, e.nome_forn, e.centro, e.centro_expedicao,
+            e.dt_pedido, e.dt_liberacao, e.nota_fiscal_explode, e.emissao, e.data_coleta, e.emissao_cte, e.data_embarque,
+            e.data_entrega, e.dt_faturamento, e.nf, e.dt_entrega, e.no_prazo, e.cidade, e.bairro, e.zona, e.uf,
+            e.documento_compras, e.numero_documento_nove_posicoes, e.origem,
+            (SELECT group_concat(DISTINCT t.transportador) FROM tracking_aereo t WHERE t.nota_fiscal_explode = e.nota_fiscal_explode) AS transportador,
+            (SELECT group_concat(DISTINCT t.cte) FROM tracking_aereo t WHERE t.nota_fiscal_explode = e.nota_fiscal_explode) AS cte
+     FROM entregas_mkt e
+     WHERE ${filtros.join(' AND ')}
+     ORDER BY e.rowid LIMIT ?`
+  ).bind(...valores, LINHAS_POR_PARTE_RELATORIO).all();
+
+  const itens = results || [];
+  return Response.json({
+    itens,
+    proximo: itens.length === LINHAS_POR_PARTE_RELATORIO ? itens[itens.length - 1]._id : null,
+  });
+}
+
+let cacheFiltrosRelatorio = null;
+
+async function filtrosRelatorio(env) {
+  if (!cacheFiltrosRelatorio || Date.now() - cacheFiltrosRelatorio.em > CACHE_FILTROS_MS) {
+    const { results } = await env.DB.prepare(
+      `SELECT DISTINCT transportador AS v FROM tracking_aereo WHERE transportador IS NOT NULL AND TRIM(transportador) <> '' ORDER BY 1`
+    ).all();
+    cacheFiltrosRelatorio = { em: Date.now(), dados: { transportadoras: results.map(r => r.v) } };
+  }
+  return Response.json(cacheFiltrosRelatorio.dados);
 }
 
 async function listarTracking(env, p) {
