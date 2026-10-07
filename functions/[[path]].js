@@ -372,11 +372,14 @@ async function filtrosEntregas(env) {
 // Uma linha por NF; se a mesma NF aparecer duas vezes (no meio de uma sincronização), vale a mais nova (maior rowid).
 const JUNTA_PLANILHA = `LEFT JOIN controle_aereo c ON c.rowid = (
   SELECT c2.rowid FROM controle_aereo c2 WHERE c2.nota_fiscal_explode = e.nota_fiscal_explode ORDER BY c2.rowid DESC LIMIT 1)`;
+// LATAM (pedido da Emilly): o embarque é no mesmo dia do CT-e, então data de embarque = DATA CTE da planilha.
 const COLUNAS_COMPLETADAS = {
   data_coleta: 'COALESCE(e.data_coleta, c.data_coleta)',
   emissao_cte: 'COALESCE(e.emissao_cte, c.data_cte)',
+  data_embarque: "COALESCE(e.data_embarque, CASE WHEN UPPER(c.transportadora) LIKE '%LATAM%' THEN c.data_cte END)",
   data_entrega: 'COALESCE(e.data_entrega, c.agenda_cd)',
 };
+const ehLatam = planilha => /LATAM/i.test(planilha?.transportadora || '');
 const colunaCompleta = nome => COLUNAS_COMPLETADAS[nome] || `e.${nome}`;
 
 // Para listas já carregadas (página de pedidos, relatório): busca as NFs na planilha pelo índice
@@ -403,6 +406,7 @@ function completarComPlanilha(linha, planilha) {
   if (!planilha) return;
   linha.data_coleta = linha.data_coleta || planilha.data_coleta;
   linha.emissao_cte = linha.emissao_cte || planilha.data_cte;
+  if (ehLatam(planilha)) linha.data_embarque = linha.data_embarque || planilha.data_cte;
   linha.data_entrega = linha.data_entrega || planilha.agenda_cd;
 }
 
