@@ -57,7 +57,7 @@ export async function onRequest(context) {
     if (path === '/api/entregas/filtros' && request.method === 'GET') return await filtrosEntregas(env);
     if (path === '/api/indicadores' && request.method === 'GET') return await indicadores(env, url.searchParams);
     if (path === '/api/relatorio' && request.method === 'GET') return await relatorio(env, url.searchParams);
-    if (path === '/api/relatorio/filtros' && request.method === 'GET') return await filtrosRelatorio(env);
+    if (path === '/api/relatorio/filtros' && request.method === 'GET') return filtrosRelatorio();
     if (path === '/api/tracking' && request.method === 'GET') return await listarTracking(env, url.searchParams);
     if (path === '/api/sync-status' && request.method === 'GET') return await statusSync(env);
 
@@ -437,26 +437,27 @@ async function relatorio(env, p) {
     filtros.push('e.n_fornecedor = ?');
     valores.push(seller);
   }
-  const transportadora = p.get('transportadora');
-  if (transportadora) {
-    filtros.push('EXISTS (SELECT 1 FROM tracking_aereo t WHERE t.nota_fiscal_explode = e.nota_fiscal_explode AND t.transportador = ?)');
-    valores.push(transportadora);
-  }
+  // O relatório só traz as transportadoras de TRANSPORTADORAS_RELATORIO (pedido da Emilly: só a LLS)
+  const transportadora = p.get('transportadora') || TRANSPORTADORAS_RELATORIO[0];
+  if (!TRANSPORTADORAS_RELATORIO.includes(transportadora)) return erro(400, 'Transportadora não disponível no relatório');
+  filtros.push('EXISTS (SELECT 1 FROM tracking_aereo t WHERE t.nota_fiscal_explode = e.nota_fiscal_explode AND t.transportador = ?)');
+  valores.push(transportadora);
 
-  // Transportadora e CT-e: todos os diferentes nos itens da mesma NF no tracking (uma NF pode ter itens com
-  // transportadoras diferentes), separados por vírgula; busca pelo índice idx_tracking_nf
+  // Transportadora e CT-e: só os itens da NF dessa transportadora (busca pelo índice idx_tracking_nf).
+  // Vários CT-es da mesma NF saem separados por vírgula.
   const { results } = await env.DB.prepare(
     `SELECT e.rowid AS _id,
             e.pedido_compra, e.pedido, e.ordem, e.n_fornecedor, e.fornecedor, e.nome_forn, e.centro, e.centro_expedicao,
             e.dt_pedido, e.dt_liberacao, e.nota_fiscal_explode, e.emissao, e.data_coleta, e.emissao_cte, e.data_embarque,
             e.data_entrega, e.dt_faturamento, e.nf, e.dt_entrega, e.no_prazo, e.cidade, e.bairro, e.zona, e.uf,
             e.documento_compras, e.numero_documento_nove_posicoes, e.origem,
-            (SELECT group_concat(DISTINCT t.transportador) FROM tracking_aereo t WHERE t.nota_fiscal_explode = e.nota_fiscal_explode) AS transportador,
-            (SELECT group_concat(DISTINCT t.cte) FROM tracking_aereo t WHERE t.nota_fiscal_explode = e.nota_fiscal_explode) AS cte
+            ? AS transportador,
+            (SELECT group_concat(DISTINCT t.cte) FROM tracking_aereo t
+             WHERE t.nota_fiscal_explode = e.nota_fiscal_explode AND t.transportador = ?) AS cte
      FROM entregas_mkt e
      WHERE ${filtros.join(' AND ')}
      ORDER BY e.rowid LIMIT ?`
-  ).bind(...valores, LINHAS_POR_PARTE_RELATORIO).all();
+  ).bind(transportadora, transportadora, ...valores, LINHAS_POR_PARTE_RELATORIO).all();
 
   const itens = results || [];
   return Response.json({
@@ -465,16 +466,11 @@ async function relatorio(env, p) {
   });
 }
 
-let cacheFiltrosRelatorio = null;
+// Nome exatamente como vem em tracking_aereo.transportador. Para liberar outra, acrescente aqui.
+const TRANSPORTADORAS_RELATORIO = ['LLS TRANSPORTE E AGENCIAMENTO DE CARGAS LTDA'];
 
-async function filtrosRelatorio(env) {
-  if (!cacheFiltrosRelatorio || Date.now() - cacheFiltrosRelatorio.em > CACHE_FILTROS_MS) {
-    const { results } = await env.DB.prepare(
-      `SELECT DISTINCT transportador AS v FROM tracking_aereo WHERE transportador IS NOT NULL AND TRIM(transportador) <> '' ORDER BY 1`
-    ).all();
-    cacheFiltrosRelatorio = { em: Date.now(), dados: { transportadoras: results.map(r => r.v) } };
-  }
-  return Response.json(cacheFiltrosRelatorio.dados);
+function filtrosRelatorio() {
+  return Response.json({ transportadoras: TRANSPORTADORAS_RELATORIO });
 }
 
 async function listarTracking(env, p) {
