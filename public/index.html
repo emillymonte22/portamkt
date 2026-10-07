@@ -296,6 +296,39 @@
                         </form>
                     </div>
 
+                    <!-- Lead time semanal (filtros próprios de seller e UF) -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <div class="flex flex-wrap justify-between items-end gap-4 mb-4">
+                            <div>
+                                <h3 id="lt-titulo" class="text-xl font-bold text-[#003366]">Todos os sellers - Geral</h3>
+                                <p class="text-xs font-semibold text-[#003366]">Lead Time semanal</p>
+                                <p class="text-[11px] text-slate-400 mt-1">Média de dias por etapa · semana da data do pedido · total = pedido → entrega ao cliente</p>
+                            </div>
+                            <div class="flex flex-wrap gap-3">
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1">Seller</label>
+                                    <select id="lt_seller" onchange="carregarLeadTime()" class="w-44 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                                        <option value="">Todos</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-semibold text-slate-600 mb-1">UF</label>
+                                    <select id="lt_uf" onchange="carregarLeadTime()" class="w-28 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                                        <option value="">Todas</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-slate-700 border border-sky-100">
+                                <thead id="lt-cabecalho" class="bg-sky-100 text-[#003366]"></thead>
+                                <tbody id="lt-corpo" class="divide-y divide-slate-200">
+                                    <tr><td class="p-4 text-center text-slate-400">A carregar dados...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <p id="ind-aviso" class="hidden p-6 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200"></p>
 
                     <div id="ind-resultado" class="space-y-6 hidden">
@@ -587,7 +620,7 @@
                 const opcoesSeller = '<option value="">Todos</option>' +
                     sellers.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
                 document.getElementById('f_seller').innerHTML = opcoesSeller;
-                for (const id of ['ind_seller', 'rel_seller']) {
+                for (const id of ['ind_seller', 'rel_seller', 'lt_seller']) {
                     const select = document.getElementById(id);
                     const escolhido = select.value;
                     select.innerHTML = opcoesSeller;
@@ -737,9 +770,99 @@
             return [...mapa].map(([chave, lista]) => ({ chave, ...somarGrupos(lista) }));
         }
 
+        // ----- Lead time semanal -----
+        const ETAPAS_LT = [
+            ['pedido_nf', 'Pedido → NF Seller'],
+            ['nf_cte', 'NF Seller → CTE'],
+            ['cte_embarque', 'CTE → Embarque'],
+            ['embarque_cd', 'Embarque → Entrega CD'],
+            ['cd_faturamento', 'Entrega CD → Faturamento Bemol'],
+            ['faturamento_cliente', 'Faturamento → Entrega Cliente'],
+        ];
+        let ufsCarregadas = false;
+
+        // Datas "AAAA-MM-DD" tratadas em UTC só para somar dias (regra 2: nada de fuso de Manaus aqui)
+        function somarDias(iso, dias) {
+            const [a, m, d] = iso.split('-').map(Number);
+            return new Date(Date.UTC(a, m - 1, d + dias)).toISOString().slice(0, 10);
+        }
+
+        // Número da semana ISO (W1 = semana com a primeira quinta-feira do ano) a partir da segunda-feira
+        function semanaIso(segunda) {
+            const quinta = somarDias(segunda, 3);
+            const ano = Number(quinta.slice(0, 4));
+            const [, m, d] = quinta.split('-').map(Number);
+            return 1 + Math.floor((Date.UTC(ano, m - 1, d) - Date.UTC(ano, 0, 1)) / (7 * 86400000));
+        }
+
+        const diaMes = iso => `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+        const umaCasa = v => v === null || v === undefined ? '—' : Number(v).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+
+        async function carregarUfs() {
+            try {
+                const { ufs } = await api('/api/indicadores/filtros');
+                const select = document.getElementById('lt_uf');
+                const escolhido = select.value;
+                select.innerHTML = '<option value="">Todas</option>' + ufs.map(u => `<option value="${esc(u)}">${esc(u)}</option>`).join('');
+                select.value = escolhido;
+                ufsCarregadas = true;
+            } catch (err) { console.error(err); }
+        }
+
+        async function carregarLeadTime() {
+            const corpo = document.getElementById('lt-corpo');
+            const seller = document.getElementById('lt_seller').value;
+            const uf = document.getElementById('lt_uf').value;
+            document.getElementById('lt-titulo').textContent = `${seller ? seller.toUpperCase() : 'Todos os sellers'} - ${uf || 'Geral'}`;
+            corpo.innerHTML = '<tr><td class="p-4 text-center text-slate-400">A carregar dados...</td></tr>';
+
+            const params = new URLSearchParams();
+            if (seller) params.set('seller', seller);
+            if (uf) params.set('uf', uf);
+            const ate = document.getElementById('ind_ate').value;
+            if (ate) params.set('ate', ate);
+
+            try {
+                const dados = await api('/api/indicadores/leadtime?' + params);
+                const porSemana = new Map(dados.linhas.map(l => [l.semana, l]));
+                const semanas = Array.from({ length: dados.semanas }, (_, i) => somarDias(dados.inicio, i * 7));
+
+                document.getElementById('lt-cabecalho').innerHTML = `
+                    <tr>
+                        <th class="p-3 text-left font-bold border-r border-sky-200">Etapa</th>
+                        ${semanas.map(s => `
+                            <th class="p-3 text-center border-r border-sky-200 min-w-[80px]">
+                                <div class="font-bold">W${semanaIso(s)}</div>
+                                <div class="text-[11px] font-normal text-slate-500">${diaMes(s)} -<br>${diaMes(somarDias(s, 6))}</div>
+                                <div class="text-[10px] font-normal text-slate-400 mt-0.5">${numero(porSemana.get(s)?.pedidos || 0)} ped.</div>
+                            </th>`).join('')}
+                    </tr>`;
+
+                const celula = (s, campo, extra = '') => {
+                    const l = porSemana.get(s);
+                    const n = l ? l['n_' + campo] : 0;
+                    return `<td class="p-3 text-center border-r border-slate-200 ${extra}" title="${n ? `média de ${n} pedidos` : 'sem pedidos com as duas datas'}">${umaCasa(n ? l[campo] : null)}</td>`;
+                };
+                corpo.innerHTML = ETAPAS_LT.map(([campo, nome]) => `
+                    <tr class="hover:bg-slate-50">
+                        <td class="p-3 font-semibold text-slate-800 border-r border-slate-200 whitespace-nowrap">${esc(nome)}</td>
+                        ${semanas.map(s => celula(s, campo)).join('')}
+                    </tr>`).join('') + `
+                    <tr class="bg-sky-200/70 text-[#003366]">
+                        <td class="p-3 font-bold border-r border-sky-300 whitespace-nowrap">TOTAL (Lead Time)</td>
+                        ${semanas.map(s => celula(s, 'total', 'font-bold border-sky-300')).join('')}
+                    </tr>`;
+            } catch (err) {
+                document.getElementById('lt-cabecalho').innerHTML = '';
+                corpo.innerHTML = `<tr><td class="p-4 text-center text-red-500">${esc(err.message)}</td></tr>`;
+            }
+        }
+
         async function carregarIndicadores(e) {
             if (e) e.preventDefault();
             indicadoresCarregados = true;
+            if (!ufsCarregadas) carregarUfs();
+            carregarLeadTime();
             const aviso = document.getElementById('ind-aviso');
             const resultado = document.getElementById('ind-resultado');
             const params = new URLSearchParams();

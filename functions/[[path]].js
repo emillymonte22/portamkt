@@ -56,6 +56,8 @@ export async function onRequest(context) {
     if (path === '/api/entregas' && request.method === 'GET') return await listarEntregas(env, url.searchParams);
     if (path === '/api/entregas/filtros' && request.method === 'GET') return await filtrosEntregas(env);
     if (path === '/api/indicadores' && request.method === 'GET') return await indicadores(env, url.searchParams);
+    if (path === '/api/indicadores/leadtime' && request.method === 'GET') return await leadTimeSemanal(env, url.searchParams);
+    if (path === '/api/indicadores/filtros' && request.method === 'GET') return await filtrosIndicadores(env);
     if (path === '/api/relatorio' && request.method === 'GET') return await relatorio(env, url.searchParams);
     if (path === '/api/relatorio/filtros' && request.method === 'GET') return filtrosRelatorio();
     if (path === '/api/tracking' && request.method === 'GET') return await listarTracking(env, url.searchParams);
@@ -414,6 +416,77 @@ async function indicadores(env, p) {
   if (cacheIndicadores.size > 50) cacheIndicadores.clear();
   cacheIndicadores.set(chave, { em: Date.now(), dados });
   return Response.json(dados);
+}
+
+// Lead time semanal: média de dias de cada etapa por semana (segunda a domingo) da data do pedido,
+// nas SEMANAS_LEAD_TIME semanas que terminam na semana de "ate" (padrão: hoje). Lê só os pedidos dessas
+// semanas (índice de data). Cada pedido conta uma vez; uma etapa só entra na média quando as duas datas
+// existem e a diferença não é negativa. Total = pedido → entrega ao cliente (ponta a ponta).
+const SEMANAS_LEAD_TIME = 6;
+const ETAPAS_LEAD_TIME = [
+  ['pedido_nf', 'dt_pedido', 'emissao'],
+  ['nf_cte', 'emissao', 'emissao_cte'],
+  ['cte_embarque', 'emissao_cte', 'data_embarque'],
+  ['embarque_cd', 'data_embarque', 'data_entrega'],
+  ['cd_faturamento', 'data_entrega', 'dt_faturamento'],
+  ['faturamento_cliente', 'dt_faturamento', 'dt_entrega'],
+  ['total', 'dt_pedido', 'dt_entrega'],
+];
+const cacheLeadTime = new Map();
+
+async function leadTimeSemanal(env, p) {
+  const fim = p.get('ate') || new Date().toISOString().slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fim)) return erro(400, 'Data inválida');
+  // Segunda-feira da semana de "fim" e da primeira semana mostrada (contas em UTC, só com a data)
+  const [a, m, d] = fim.split('-').map(Number);
+  const diaFim = Date.UTC(a, m - 1, d);
+  const segundaFim = diaFim - ((new Date(diaFim).getUTCDay() + 6) % 7) * 86400000;
+  const inicio = new Date(segundaFim - (SEMANAS_LEAD_TIME - 1) * 7 * 86400000).toISOString().slice(0, 10);
+  const ultimo = new Date(segundaFim + 6 * 86400000).toISOString().slice(0, 10);
+
+  const seller = p.get('seller') || '';
+  const uf = p.get('uf') || '';
+  const chave = JSON.stringify([inicio, seller, uf]);
+  const guardado = cacheLeadTime.get(chave);
+  if (guardado && Date.now() - guardado.em < CACHE_FILTROS_MS) return Response.json(guardado.dados);
+
+  const filtros = ['dt_pedido BETWEEN ? AND ?', 'pedido IS NOT NULL'];
+  const valores = [inicio, ultimo];
+  if (seller) { filtros.push('n_fornecedor = ?'); valores.push(seller); }
+  if (uf) { filtros.push('uf = ?'); valores.push(uf); }
+
+  const colunas = [...new Set(ETAPAS_LEAD_TIME.flatMap(([, de, ate]) => [de, ate]))];
+  const medias = ETAPAS_LEAD_TIME.map(([nome, de, ate]) =>
+    `AVG(CASE WHEN julianday(${ate}) - julianday(${de}) >= 0 THEN julianday(${ate}) - julianday(${de}) END) AS ${nome},
+     COUNT(CASE WHEN julianday(${ate}) - julianday(${de}) >= 0 THEN 1 END) AS n_${nome}`).join(',\n');
+  const { results } = await env.DB.prepare(
+    `WITH base AS (
+       SELECT ${colunas.map(c => `MAX(${c}) AS ${c}`).join(', ')}
+       FROM entregas_mkt WHERE ${filtros.join(' AND ')}
+       GROUP BY pedido
+     )
+     SELECT date(dt_pedido, '-' || ((CAST(strftime('%w', dt_pedido) AS INTEGER) + 6) % 7) || ' days') AS semana,
+            COUNT(*) AS pedidos, ${medias}
+     FROM base GROUP BY semana ORDER BY semana`
+  ).bind(...valores).all();
+
+  const dados = { inicio, fim: ultimo, semanas: SEMANAS_LEAD_TIME, seller, uf, linhas: results || [] };
+  if (cacheLeadTime.size > 50) cacheLeadTime.clear();
+  cacheLeadTime.set(chave, { em: Date.now(), dados });
+  return Response.json(dados);
+}
+
+// UFs para o filtro do lead time (lê a coluna inteira uma vez; cache de 30 min)
+let cacheFiltrosIndicadores = null;
+
+async function filtrosIndicadores(env) {
+  if (!cacheFiltrosIndicadores || Date.now() - cacheFiltrosIndicadores.em > CACHE_FILTROS_MS) {
+    const { results } = await env.DB.prepare(
+      `SELECT DISTINCT uf AS v FROM entregas_mkt WHERE uf IS NOT NULL AND TRIM(uf) <> '' ORDER BY 1`
+    ).all();
+    cacheFiltrosIndicadores = { em: Date.now(), dados: { ufs: results.map(r => r.v) } };
+  }
+  return Response.json(cacheFiltrosIndicadores.dados);
 }
 
 // Relatório para baixar: todas as colunas de entregas_mkt + transportadora e CT-e do tracking (pela NF).
