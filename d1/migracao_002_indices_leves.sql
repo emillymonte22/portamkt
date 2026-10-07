@@ -5,4 +5,5 @@
 DROP INDEX IF EXISTS idx_entregas_prazo;
 DROP INDEX IF EXISTS idx_tracking_chave;
 DROP INDEX IF EXISTS idx_tracking_forn;
-CREATE INDEX IF NOT EXISTS idx_entregas_data ON entregas_mkt (dt_pedido DESC, pedido DESC);
+-- idx_entregas_data (dt_pedido, pedido) foi substituído por idx_entregas_data_compra na migração 004;
+-- não é criado aqui para não gastar gravações à toa (o D1 conta cada linha indexada).

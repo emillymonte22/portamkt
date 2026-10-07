@@ -47,6 +47,7 @@ Cloudflare Pages (site estático)  →  public/index.html      (tela)
 | `databricks/job.json` | Configuração do Job no Databricks (cluster, horário, e-mails). |
 | `CONTEXTO_IA.md` | Este arquivo. |
 | `CLAUDE.md` | Instruções para o Claude Code (carrega este arquivo automaticamente). |
+| `ferramentas/trocar_senha.ps1` | Gera o comando SQL para trocar senha/login de um usuário, com a senha já em hash (seção 13). |
 
 Arquivos fora de `public/` **não** ficam acessíveis pela internet.
 
@@ -57,12 +58,13 @@ Login com usuário e senha (tabela `usuarios`). Três perfis:
 | Perfil | Vê | Pode |
 |---|---|---|
 | `comercial` | Consultas, Indicadores, Relatórios | Só consultar |
-| `cd` | Tudo do comercial + "Disponível para Coleta (LATAM)" | Só consultar |
+| `cd` | Consultas (só "Pedidos Marketplace", **sem** o cartão "Inclusão de Coletas (LATAM)"), Indicadores, Relatórios + "Disponível para Coleta (LATAM)" | Só consultar |
 | `admin` | Tudo + "Painel Admin (Sinalização)" | **Incluir coletas LATAM** e liberar/bloquear cargas para o CD |
 
 ## 5. Autenticação e segurança (como funciona)
 
 - `POST /api/login` confere a senha e devolve um **cookie `sessao`** (HttpOnly, Secure, SameSite=Strict) assinado com HMAC-SHA256 usando o secret `SESSION_SECRET` (configurado no Cloudflare, **nunca** no código). Validade: 8 horas.
+- A cada requisição a API confere o usuário na tabela `usuarios` (1 linha lida): **usuário apagado, perfil alterado ou senha trocada valem na hora**. O cookie leva uma marca da senha gravada (`ver`); se a senha mudar no banco, as sessões abertas caem e a pessoa precisa entrar com a senha nova.
 - Senhas guardadas como hash `pbkdf2$<iterações>$<sal>$<hash>`. Senha antiga em texto puro é convertida automaticamente no próximo login.
 - **Toda rota `/api/*` exige sessão**, exceto `/api/login`. Sem sessão → 401 e a tela volta para o login.
 - **Permissões são checadas no servidor** (`functions/[[path]].js`). A tela só esconde menus; quem garante é a API.
@@ -75,13 +77,15 @@ Login com usuário e senha (tabela `usuarios`). Três perfis:
 | `POST /api/login` `{username, senha}` | público | `{username, perfil}` + cookie |
 | `POST /api/logout` | qualquer | apaga o cookie |
 | `GET /api/me` | logado | `{username, perfil}` |
-| `GET /api/agendamentos` | logado | últimos 100 agendamentos |
+| `GET /api/agendamentos` | comercial, admin | últimos 100 agendamentos (cartão "Inclusão de Coletas" da aba Consultas; o CD recebe 403) |
+| `GET /api/agendamentos?escopo=cd` | cd, admin | **todas** as coletas LATAM liberadas (aba "Disponível para Coleta"; recarrega ao abrir a aba) |
+| `GET /api/agendamentos?escopo=admin` | admin | todas as coletas LATAM, bloqueadas primeiro (Painel Admin; recarrega ao abrir a aba) |
 | `POST /api/agendamentos` `{seller, transportadora, nota_fiscal, cte, data_coleta, data_cte, entrega_cd, status_etapa}` | admin | inclui coleta LATAM. `nota_fiscal` aceita várias NFs separadas por `/`. **Nasce bloqueada** (`liberado_latam = 0`) |
 | `PATCH /api/agendamentos/:id/latam` `{liberado_latam: true/false}` | admin | libera (avisa o CD) ou bloqueia a coleta |
-| `GET /api/entregas?seller=&status=&de=&ate=&busca=&apos_data=&apos_pedido=` | logado | `{itens, tem_mais, proximo, por_pagina}` (50 pedidos por página, sem repetir pedido). Paginação por **cursor**: para a próxima página, envie `apos_data`/`apos_pedido` de `proximo`. Sem data, mostra o ano corrente. `busca`: número exato de NF, pedido ou ordem em todo o histórico; se não achar, busca "contém" no ano. **Não retorna total** (ver regra 12) |
+| `GET /api/entregas?seller=&status=&de=&ate=&busca=&apos_data=&apos_pedido_compra=` | logado | `{itens, tem_mais, proximo, por_pagina}` (50 pedidos de compra por página, sem repetir `pedido_compra`; linhas sem `pedido_compra` não aparecem). Paginação por **cursor**: para a próxima página, envie `apos_data`/`apos_pedido_compra` de `proximo`. Sem data, mostra o ano corrente. `busca`: número exato de NF, pedido de compra (`pedido_compra`) ou ordem em todo o histórico; se não achar, busca "contém" no ano. **Não retorna total** (ver regra 12) |
 | `GET /api/entregas/filtros` | logado | `{sellers: [...], status: [...]}` para preencher os selects |
+| `GET /api/indicadores?seller=&de=&ate=` | logado | `{de, ate, seller, grupos}`: um grupo por seller × mês (`mes` = `AAAA-MM`) com `pedidos`, `no_prazo`, `fora_prazo`, `sem_entrega` e somas/quantidades de dias (`soma_fat/n_fat` pedido→faturamento CD, `soma_ent/n_ent` pedido→entrega cliente, `soma_cd/n_cd` coleta→entrega CD). Sem data, ano corrente. Cada `pedido` conta uma vez. Uma consulta por filtro, em cache por 30 min; a tela soma os grupos |
 | `GET /api/tracking?nf=` | logado | itens da NF na tabela de tracking aéreo |
-| `GET /api/consulta?nf=` | logado | `{tracking, entrega, coleta}`: a NF nas três fontes (tracking do Databricks, pedido do marketplace e coleta LATAM do portal). Usada na "Consulta de coletas" para calcular o status |
 | `GET /api/sync-status` | logado | data/hora da última sincronização com o Databricks |
 
 No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `public/index.html`, que já trata 401 e erros.
@@ -92,7 +96,7 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 - `usuarios` — `id, username, senha (hash), perfil`
 - `agendamentos` (coletas LATAM) — `id, seller, transportadora, nota_fiscal (uma ou mais NFs só com números, separadas por "/", ex.: 617944/617945), cte, data_coleta, data_cte, entrega_cd, status_etapa, liberado_latam (0 = bloqueada, 1 = liberada para o CD), criado_em`. Só o admin inclui; a coleta nasce bloqueada e o admin libera no Painel Admin.
 
-**Tabelas espelhadas do Databricks** (somente leitura para o portal; o Job apaga/insere a cada hora — **não editar à mão nem pelo portal**):
+**Tabelas espelhadas do Databricks** (somente leitura para o portal; o Job apaga/insere 1x por dia, às 8h de Manaus — **não editar à mão nem pelo portal**):
 - `entregas_mkt` ← `bemolonline.bol.dados_entregas_mkt_manifest_01`. Um pedido do marketplace por linha. Colunas principais: `pedido, ordem, nf, n_fornecedor (seller), dt_pedido, dt_liberacao, dt_faturamento, dt_entrega, no_prazo (NO PRAZO | SEM ENTREGA | FORA DO PRAZO), cidade, bairro, zona, uf, nota_fiscal_explode, data_coleta, emissao_cte, data_embarque, data_entrega`.
 - `tracking_aereo` ← `comercial.logint.f_tracking_aereo`. Um item de NF por linha, com CT-e, transportadora, datas de coleta/embarque/entrega, material e valores. A coluna `etapa` vem em código do sistema (`MANIFEST_01`, `VLPOSTNG_01`, `SCHEDULE_01`…), ainda sem tradução.
 - `sync_log` — uma linha por execução do Job (`tabela, executado_em, total_origem, inseridos, removidos`).
@@ -112,7 +116,7 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 8. **Não alterar as tabelas `entregas_mkt`, `tracking_aereo` e `sync_log` pelo portal** — elas são sobrescritas pelo Job.
 9. **Coluna nova no banco exige migração ANTES de usar no código.** Se a API passar a gravar/ler uma coluna que não existe, dá "Erro interno". Mudança de estrutura no banco: criar um arquivo novo `d1/migracao_00X_<descricao>.sql`, aplicar com o comando da seção 9 e atualizar `d1/schema.sql`.
 10. Manter o visual: Tailwind, azul Bemol `#003366` / `#002B49`, cartões `bg-white rounded-2xl shadow-sm border border-slate-200`.
-11. Só o admin inclui coletas LATAM; o status LATAM na consulta aparece só para o seller Brascol.
+11. Só o admin inclui coletas LATAM.
 12. **Limites do plano grátis do D1:** 5 milhões de linhas lidas e 100 mil gravadas por dia. Não usar `COUNT(*)` nem consultas sem `WHERE`/`LIMIT` na tabela inteira a cada abertura de tela; não criar índices sem necessidade (cada índice multiplica as gravações do Job).
 
 ## 9. Como publicar e testar
@@ -152,12 +156,12 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 
 ## 11. Pendências conhecidas
 
-- **Aplicar no banco real** (combinado para 07/10 às 9h, depois que o limite diário do D1 zerou): `d1/migracao_002_indices_leves.sql` e `d1/migracao_003_coletas_latam.sql`. Até aplicar a 003, incluir coleta dá erro. Depois de aplicar, remova este item.
+- **Aplicar no banco real** (combinado para 07/10 às 9h, depois que o limite diário do D1 zerou): `d1/migracao_002_indices_leves.sql`, `d1/migracao_003_coletas_latam.sql` e `d1/migracao_004_indices_pedido_compra.sql`, nesta ordem e **antes** de publicar o código da lista por `pedido_compra` (sem a 004 a lista de pedidos lê a tabela inteira a cada página). Até aplicar a 003, incluir coleta dá erro. Depois de aplicar, remova este item.
 - Compartilhar o Job e a pasta do notebook com `carlossimoes@bemol.com.br` (Can Manage): a Emilly faz pela interface do Databricks (Permissions).
 - Traduzir os códigos da coluna `etapa` (`MANIFEST_01`, `VLPOSTNG_01`, …) para nomes legíveis.
-- Abas "Indicadores" e "Extrair Relatório" ainda são placeholders.
+- Aba "Extrair Relatório" ainda é placeholder.
 - Detalhe do tracking por NF (`/api/tracking`) já existe na API, mas ainda não tem tela.
-- O formulário "Consultar Agendamento" tem listas fixas de seller/transportadora no HTML.
+- O formulário "Nova Coleta LATAM" tem lista fixa de sellers no HTML.
 - Limitar tentativas de login (regra de rate limiting no Cloudflare).
 - Trocar o dono do Job por um usuário de serviço (service principal) em vez de uma pessoa.
 - Futuro: possível migração para a workstation NVIDIA do setor (via Cloudflare Tunnel ou só na rede interna).
@@ -186,6 +190,10 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 Tabela `usuarios` (admin, cd, comercial: um de cada hoje). Para criar um usuário, insira a senha em texto puro; ela vira hash no primeiro login:
 `npx -y wrangler@4.147.0 d1 execute portamkt-db --remote --command "INSERT INTO usuarios (username, senha, perfil) VALUES ('nome', 'senha-inicial', 'cd')"`
 
+Para **trocar a senha** (e, se quiser, o login) de alguém, use o script que gera o comando com a senha **já em hash** (a senha é digitada escondida e nunca fica em texto puro; exige 12+ caracteres com 3 tipos):
+`powershell -ExecutionPolicy Bypass -File ferramentas\trocar_senha.ps1 -Usuario <login-atual> [-NovoUsuario <novo-login>]`
+O comando sai copiado; cole e execute em dash.cloudflare.com → D1 → `portamkt-db` → Console (ou com `wrangler d1 execute --remote --command`). Com o código atual, as sessões abertas com a senha antiga caem na hora. Para derrubar **todas** as sessões de uma vez, troque o `SESSION_SECRET` (seção 12).
+
 ## 14. Histórico e decisões (out/2026)
 
 Em ordem, para quem pegar o projeto entender por que as coisas são como são:
@@ -201,3 +209,14 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
 9. **Alterações da Emilly via Gemini (copia e cola no GitHub):** um arquivo da API foi colado cortado (a publicação falhou e o site antigo ficou no ar) e colunas foram usadas com nome errado (`DT_FATURAMENTO` em vez de `dt_faturamento`; campos de `entregas_mkt` lidos na tabela de tracking). Daí as regras 9 e 12 e o item "onde está cada campo" da seção 7.
 10. **Coletas LATAM (regras definidas pela Emilly):** só o admin inclui; nasce bloqueada e o botão do admin libera para o CD; várias NFs separadas por "/"; campos CT-e, data da coleta, data do CT-e e entrega no CD; status LATAM na consulta só para o seller Brascol ("Brascol" e "Brascol - ONESHOP" são o mesmo seller). A migração 003 recria `agendamentos` com essas colunas.
 11. **Limitações do Claude Code neste projeto:** o modo automático bloqueia o Claude de criar/alterar o Job que envia dados para fora (Cloudflare) e de conceder permissões no Databricks; esses comandos são rodados pela própria pessoa (prefixo `!` no Claude Code).
+12. **Ajustes pedidos pela Emilly (06/10, Claude Code):**
+    - Campo vazio aparece como `—` em todas as tabelas (função `txt()` em `index.html`); a coluna Destino não mostra mais "ManausSem dados" quando falta UF.
+    - A lista de pedidos passou a ser por **`pedido_compra`** (antes `pedido`): coluna PEDIDO_COMPRA, linhas repetidas, paginação (cursor `apos_pedido_compra`) e busca. Índices trocados na migração 004 (`idx_entregas_data_compra`, `idx_entregas_compra` no lugar de `idx_entregas_data` e `idx_entregas_pedido`); a 002 deixou de criar `idx_entregas_data` para não gastar gravações.
+    - Abas do CD e do Admin buscam a lista no servidor sempre que abrem (`?escopo=cd|admin`); o CD vê todas as coletas liberadas, não só as 100 mais recentes.
+    - Logins e senhas fracos: criado `ferramentas/trocar_senha.ps1` (gera o `UPDATE` com hash PBKDF2 pronto, sem a senha passar pelo chat nem ficar em texto puro no banco).
+    - Perfil `cd` não vê o cartão "Inclusão de Coletas (LATAM)" (só a aba "Disponível para Coleta"); a API nega a lista geral ao CD.
+    - Tabela "Pedidos Marketplace" fica oculta até a pessoa clicar em Pesquisar (abrir o portal não lê mais `entregas_mkt`).
+    - **Card "Consultar Coletas" removido** da aba Consultas a pedido da Emilly, junto com a rota `/api/consulta` (só ele usava). Com isso some também o "status LATAM só para Brascol", que existia só nessa consulta.
+    - Sessão conferida no banco a cada requisição: troca de senha/perfil ou exclusão do usuário vale na hora. Ao publicar, todos precisam entrar de novo uma vez (cookies antigos não têm a marca `ver`).
+    - Documentação corrigida: o Job roda 1x por dia (8h), não "a cada hora".
+13. **Aba Indicadores (07/10, Claude Code):** filtros seller/período (padrão: ano corrente); cartões (pedidos, % no prazo sobre os entregues, fora do prazo, sem entrega, prazos médios em dias); gráfico de pedidos por mês empilhado por situação (HTML puro, sem biblioteca); tabela por seller. Rota `/api/indicadores` faz **uma** consulta agregada por seller × mês (lê as linhas do período uma vez) com cache de 30 min; a tela só busca na primeira abertura da aba e no botão Atualizar. Prazos negativos ou com data faltando ficam fora das médias. Quando um pedido tem linhas com status diferentes, vale o maior em ordem alfabética (`SEM ENTREGA` > `NO PRAZO` > `FORA DO PRAZO`).

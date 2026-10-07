@@ -100,47 +100,7 @@
                 <!-- CONTEÚDO: CONSULTAS -->
                 <div id="conteudo-consultas" class="space-y-6">
 
-                    <!-- 1. Consultar Coletas -->
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                        <h3 class="text-base font-bold text-slate-800 mb-4">Consultar Coletas</h3>
-                        <form id="consulta-form" onsubmit="consultarOperacao(event)" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Seller</label>
-                                <select id="filtro_seller" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
-                                    <option value="">Selecione o Seller</option>
-                                    <option value="Brascol - ONESHOP">Brascol - ONESHOP</option>
-                                    <option value="Tramontina">Tramontina</option>
-                                    <option value="Vitrola">Vitrola</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Transportadora</label>
-                                <select id="filtro_transportadora" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
-                                    <option value="">Selecione a Transportadora</option>
-                                    <option value="LATAM">LATAM</option>
-                                    <option value="Essencial Cargo">Essencial Cargo</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Nota Fiscal (NF)</label>
-                                <input type="text" id="filtro_nf" required placeholder="Número da NF" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
-                            </div>
-                            <div>
-                                <button type="submit" class="w-full bg-[#003366] hover:bg-sky-800 text-white font-semibold px-4 py-2 rounded-lg text-sm transition shadow-sm">Pesquisar</button>
-                            </div>
-                        </form>
-
-                        <div id="resultado-pesquisa" class="hidden mt-6 p-4 bg-sky-50 border border-sky-200 rounded-xl">
-                            <h4 class="text-sm font-bold text-sky-900 mb-2">Resultado para a NF: <span id="res-nf" class="text-orange-600"></span></h4>
-                            <div id="res-encontrado" class="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                <div><span class="text-xs text-slate-500 block">Último Status / Etapa:</span> <span id="res-etapa" class="font-bold text-emerald-700"></span></div>
-                                <div id="res-latam-container"><span class="text-xs text-slate-500 block">Status Latam:</span> <span id="res-latam" class="font-semibold text-sky-700"></span></div>
-                            </div>
-                            <p id="res-nao-encontrado" class="hidden text-sm text-slate-600">Nenhuma coleta encontrada com esses dados.</p>
-                        </div>
-                    </div>
-
-                    <!-- 2. Pedidos Marketplace -->
+                    <!-- 1. Pedidos Marketplace -->
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <div class="flex justify-between items-start mb-4">
                             <div>
@@ -172,7 +132,7 @@
                                 <input type="date" id="f_ate" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">NF, pedido ou ordem</label>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">NF, pedido de compra ou ordem</label>
                                 <input type="text" id="f_busca" inputmode="numeric" placeholder="Número" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
                             </div>
                             <div>
@@ -180,6 +140,10 @@
                             </div>
                         </form>
 
+                        <p id="entregas-aviso" class="p-6 text-center text-sm text-slate-400 bg-slate-50 rounded-xl">Use os filtros acima e clique em <strong>Pesquisar</strong> para ver os pedidos.</p>
+
+                        <!-- Tabela oculta até a primeira pesquisa -->
+                        <div id="entregas-resultado" class="hidden">
                         <div class="overflow-x-auto">
                             <table class="w-full text-left text-sm text-slate-600">
                                 <thead class="bg-slate-50 text-slate-700 uppercase text-xs">
@@ -213,10 +177,11 @@
                                 <button id="pag-proxima" onclick="mudarPagina(1)" class="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 disabled:opacity-40">Próxima</button>
                             </div>
                         </div>
+                        </div>
                     </div>
 
-                    <!-- 3. Inclusão e Gestão de Coletas (LATAM) -->
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <!-- 2. Inclusão e Gestão de Coletas (LATAM) — oculto para o perfil cd -->
+                    <div id="card-inclusao-coleta" class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <div class="flex justify-between items-center mb-4">
                             <div>
                                 <h3 class="text-base font-bold text-slate-800">Inclusão de Coletas (LATAM)</h3>
@@ -296,6 +261,83 @@
                                     <tr><td colspan="8" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>
                                 </tbody>
                             </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CONTEÚDO: INDICADORES -->
+                <div id="conteudo-indicadores" class="space-y-6 hidden">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <h3 class="text-base font-bold text-slate-800">Indicadores de Entrega</h3>
+                                <p class="text-xs text-slate-500">Pedidos do marketplace pela data do pedido · cada pedido conta uma vez</p>
+                            </div>
+                            <span id="ind-periodo" class="text-xs text-slate-400"></span>
+                        </div>
+                        <form onsubmit="carregarIndicadores(event)" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Seller</label>
+                                <select id="ind_seller" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                                    <option value="">Todos</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Pedido de</label>
+                                <input type="date" id="ind_de" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Até</label>
+                                <input type="date" id="ind_ate" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                            </div>
+                            <div>
+                                <button type="submit" class="w-full bg-[#003366] hover:bg-sky-800 text-white font-semibold px-4 py-2 rounded-lg text-sm transition shadow-sm">Atualizar</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <p id="ind-aviso" class="hidden p-6 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200"></p>
+
+                    <div id="ind-resultado" class="space-y-6 hidden">
+                        <!-- Cartões -->
+                        <div id="ind-cartoes" class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-4"></div>
+
+                        <!-- Pedidos por mês -->
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                            <div class="flex flex-wrap justify-between items-start gap-2 mb-4">
+                                <div>
+                                    <h3 class="text-base font-bold text-slate-800">Pedidos por mês</h3>
+                                    <p class="text-xs text-slate-500">Situação da entrega ao cliente</p>
+                                </div>
+                                <div id="ind-legenda" class="flex flex-wrap gap-4 text-xs text-slate-600"></div>
+                            </div>
+                            <div class="relative">
+                                <div id="ind-grafico" class="flex gap-2 overflow-x-auto pb-1"></div>
+                                <div id="ind-tooltip" class="hidden absolute z-10 pointer-events-none bg-white border border-slate-200 shadow-lg rounded-lg p-3 text-xs text-slate-700 min-w-[170px]"></div>
+                            </div>
+                        </div>
+
+                        <!-- Por seller -->
+                        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                            <h3 class="text-base font-bold text-slate-800">Por seller</h3>
+                            <p class="text-xs text-slate-500 mb-4">Ordenado pela quantidade de pedidos · % no prazo considera só os pedidos já entregues</p>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-sm text-slate-600">
+                                    <thead class="bg-slate-50 text-slate-700 uppercase text-xs">
+                                        <tr>
+                                            <th class="p-3">Seller</th>
+                                            <th class="p-3 text-right">Pedidos</th>
+                                            <th class="p-3 text-right">No prazo</th>
+                                            <th class="p-3 text-right">Fora do prazo</th>
+                                            <th class="p-3 text-right">Sem entrega</th>
+                                            <th class="p-3 text-right">% no prazo</th>
+                                            <th class="p-3 text-right">Pedido → faturamento CD</th>
+                                            <th class="p-3 text-right">Pedido → entrega cliente</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tabela-ind-sellers" class="divide-y divide-slate-200"></tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -387,9 +429,14 @@
             return String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
         }
 
+        // Campo vazio aparece como "—" (regra 3); o valor preenchido passa sempre por esc()
+        function txt(v) {
+            return v === null || v === undefined || String(v).trim() === '' ? '—' : esc(v);
+        }
+
         function formatarData(v) {
             const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(v || '');
-            return m ? `${m[3]}/${m[2]}/${m[1]}` : 'Sem dados';
+            return m ? `${m[3]}/${m[2]}/${m[1]}` : '—';
         }
 
         async function api(caminho, opcoes = {}) {
@@ -453,6 +500,8 @@
             };
             // Só o admin inclui coletas (a API também confere)
             document.getElementById('btn-incluir-coleta').classList.toggle('hidden', currentUser.perfil !== 'admin');
+            // O CD vê as coletas só na aba "Disponível para Coleta (LATAM)" (a API também confere)
+            document.getElementById('card-inclusao-coleta').classList.toggle('hidden', currentUser.perfil === 'cd');
             for (const [aba, mostrar] of Object.entries(visivel)) {
                 const el = document.getElementById('menu-' + aba);
                 if (el) {
@@ -470,7 +519,7 @@
                 el.classList.remove(...cfg.ativo.split(' '), ...cfg.inativo.split(' '));
                 el.classList.add(...(ativo ? cfg.ativo : cfg.inativo).split(' '));
             }
-            const especificas = ['consultas', 'cd-coleta', 'admin-painel'];
+            const especificas = ['consultas', 'indicadores', 'cd-coleta', 'admin-painel'];
             for (const id of especificas) {
                 const el = document.getElementById('conteudo-' + id);
                 if (el) el.classList.toggle('hidden', id !== aba);
@@ -483,6 +532,8 @@
                 document.getElementById('titulo-generico').textContent = MENUS[aba].titulo;
             }
 
+            // Indicadores carregam na primeira abertura; depois, só pelo botão Atualizar (economiza leituras do D1)
+            if (aba === 'indicadores' && !indicadoresCarregados) carregarIndicadores();
             if (aba === 'cd-coleta') carregarCdLatam();
             if (aba === 'admin-painel') carregarAdminSinalizacao();
         }
@@ -490,15 +541,20 @@
         async function carregarDados() {
             carregarFiltrosEntregas();
             carregarStatusSync();
-            buscarEntregas();
-            carregarAgendamentos();
+            if (currentUser.perfil !== 'cd') carregarAgendamentos();
+            // Pedidos Marketplace só carregam quando a pessoa clica em Pesquisar
         }
 
         async function carregarFiltrosEntregas() {
             try {
                 const { sellers, status } = await api('/api/entregas/filtros');
-                document.getElementById('f_seller').innerHTML = '<option value="">Todos</option>' +
+                const opcoesSeller = '<option value="">Todos</option>' +
                     sellers.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+                document.getElementById('f_seller').innerHTML = opcoesSeller;
+                const indSeller = document.getElementById('ind_seller');
+                const escolhido = indSeller.value;
+                indSeller.innerHTML = opcoesSeller;
+                indSeller.value = escolhido;
                 document.getElementById('f_status').innerHTML = '<option value="">Todos</option>' +
                     status.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
             } catch (err) { console.error(err); }
@@ -516,6 +572,10 @@
 
         function buscarEntregas(e) {
             if (e) { e.preventDefault(); paginaEntregas = 1; cursores = [null]; }
+            document.getElementById('entregas-aviso').classList.add('hidden');
+            document.getElementById('entregas-resultado').classList.remove('hidden');
+            document.getElementById('tabela-entregas').innerHTML =
+                '<tr><td colspan="14" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>';
             carregarEntregas();
         }
 
@@ -533,6 +593,7 @@
 
         function corStatus(s) {
             const t = (s || '').toUpperCase();
+            if (!t.trim()) return 'bg-slate-100 text-slate-500';
             if (t.includes('FORA')) return 'bg-red-100 text-red-800';
             if (t.includes('SEM')) return 'bg-amber-100 text-amber-800';
             return 'bg-emerald-100 text-emerald-800';
@@ -544,7 +605,7 @@
             const cursor = cursores[cursores.length - 1];
             if (cursor) {
                 params.set('apos_data', cursor.apos_data);
-                params.set('apos_pedido', cursor.apos_pedido);
+                params.set('apos_pedido_compra', cursor.apos_pedido_compra);
             }
             const campos = { seller: 'f_seller', status: 'f_status', de: 'f_de', ate: 'f_ate', busca: 'f_busca' };
             for (const [param, id] of Object.entries(campos)) {
@@ -563,8 +624,8 @@
                 const vistos = new Set();
                 const itens = [];
                 for (const item of itensRaw) {
-                    if (item.pedido && !vistos.has(item.pedido)) {
-                        vistos.add(item.pedido);
+                    if (item.pedido_compra && !vistos.has(item.pedido_compra)) {
+                        vistos.add(item.pedido_compra);
                         itens.push(item);
                     }
                 }
@@ -574,20 +635,20 @@
                     ? '<tr><td colspan="14" class="p-4 text-center text-slate-400">Nenhum pedido encontrado.</td></tr>'
                     : itens.map(i => `
                         <tr class="hover:bg-slate-50">
-                            <td class="p-3 font-medium text-slate-900">${esc(i.pedido)}</td>
-                            <td class="p-3">${esc(i.n_fornecedor || 'Sem dados')}</td>
+                            <td class="p-3 font-medium text-slate-900">${txt(i.pedido_compra)}</td>
+                            <td class="p-3">${txt(i.n_fornecedor)}</td>
                             <td class="p-3">${formatarData(i.dt_pedido)}</td>
-                            <td class="p-3">${esc(i.nota_fiscal_explode || 'Sem dados')}</td>
+                            <td class="p-3">${txt(i.nota_fiscal_explode)}</td>
                             <td class="p-3">${formatarData(i.emissao)}</td>
                             <td class="p-3">${formatarData(i.data_coleta)}</td>
                             <td class="p-3">${formatarData(i.emissao_cte)}</td>
                             <td class="p-3">${formatarData(i.data_embarque)}</td>
                             <td class="p-3">${formatarData(i.data_entrega)}</td>
                             <td class="p-3">${formatarData(i.dt_faturamento)}</td>
-                            <td class="p-3 font-semibold text-[#003366]">${esc(i.nf || 'Sem dados')}</td>
+                            <td class="p-3 font-semibold text-[#003366]">${txt(i.nf)}</td>
                             <td class="p-3">${formatarData(i.dt_entrega)}</td>
-                            <td class="p-3">${esc([i.bairro, i.cidade].filter(Boolean).join(', '))}${i.uf ? ' - ' + esc(i.uf) : 'Sem dados'}</td>
-                            <td class="p-3"><span class="${corStatus(i.no_prazo)} text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap">${esc(i.no_prazo || 'Pendente')}</span></td>
+                            <td class="p-3">${txt([[i.bairro, i.cidade].filter(Boolean).join(', '), i.uf].filter(Boolean).join(' - '))}</td>
+                            <td class="p-3"><span class="${corStatus(i.no_prazo)} text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap">${txt(i.no_prazo)}</span></td>
                         </tr>`).join('');
             } catch (err) {
                 tbody.innerHTML = `<tr><td colspan="14" class="p-4 text-center text-red-500">${esc(err.message)}</td></tr>`;
@@ -598,6 +659,166 @@
                 qtd ? `Pedidos ${inicio}–${inicio + qtd - 1} · página ${paginaEntregas}` : '';
             document.getElementById('pag-anterior').disabled = paginaEntregas <= 1;
             document.getElementById('pag-proxima').disabled = !temMais;
+        }
+
+        // ---------- Indicadores ----------
+        let indicadoresCarregados = false;
+
+        const SERIES_IND = [
+            { campo: 'no_prazo',    nome: 'No prazo',      cor: 'bg-emerald-600' },
+            { campo: 'fora_prazo',  nome: 'Fora do prazo', cor: 'bg-red-600' },
+            { campo: 'sem_entrega', nome: 'Sem entrega',   cor: 'bg-amber-500' },
+            { campo: 'outros',      nome: 'Sem status',    cor: 'bg-slate-300' },
+        ];
+        const NOMES_MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+        const numero = v => Number(v || 0).toLocaleString('pt-BR');
+        const pct = (parte, total) => total ? `${(parte / total * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '—';
+        const dias = (soma, n) => n ? `${(soma / n).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} dias` : '—';
+
+        function nomeMes(mes) {
+            const [a, m] = mes.split('-');
+            return `${NOMES_MESES[Number(m) - 1]}/${a.slice(2)}`;
+        }
+
+        // Soma os grupos (seller × mês) vindos da API
+        function somarGrupos(grupos) {
+            const t = { pedidos: 0, no_prazo: 0, fora_prazo: 0, sem_entrega: 0, soma_fat: 0, n_fat: 0, soma_ent: 0, n_ent: 0, soma_cd: 0, n_cd: 0 };
+            for (const g of grupos) for (const k of Object.keys(t)) t[k] += Number(g[k] || 0);
+            t.outros = t.pedidos - t.no_prazo - t.fora_prazo - t.sem_entrega;
+            return t;
+        }
+
+        function agruparPor(grupos, campo) {
+            const mapa = new Map();
+            for (const g of grupos) {
+                const chave = g[campo] ?? '';
+                if (!mapa.has(chave)) mapa.set(chave, []);
+                mapa.get(chave).push(g);
+            }
+            return [...mapa].map(([chave, lista]) => ({ chave, ...somarGrupos(lista) }));
+        }
+
+        async function carregarIndicadores(e) {
+            if (e) e.preventDefault();
+            indicadoresCarregados = true;
+            const aviso = document.getElementById('ind-aviso');
+            const resultado = document.getElementById('ind-resultado');
+            const params = new URLSearchParams();
+            const campos = { seller: 'ind_seller', de: 'ind_de', ate: 'ind_ate' };
+            for (const [param, id] of Object.entries(campos)) {
+                const v = document.getElementById(id).value.trim();
+                if (v) params.set(param, v);
+            }
+
+            resultado.classList.add('hidden');
+            aviso.textContent = 'A calcular indicadores...';
+            aviso.classList.remove('hidden');
+            try {
+                const dados = await api('/api/indicadores?' + params);
+                document.getElementById('ind-periodo').textContent = `Período: ${formatarData(dados.de)} a ${formatarData(dados.ate)}`;
+                if (!dados.grupos.length) {
+                    aviso.textContent = 'Nenhum pedido encontrado no período.';
+                    return;
+                }
+                aviso.classList.add('hidden');
+                resultado.classList.remove('hidden');
+                desenharCartoes(somarGrupos(dados.grupos));
+                desenharGraficoMeses(dados.grupos);
+                desenharTabelaSellers(dados.grupos);
+            } catch (err) {
+                aviso.textContent = err.message;
+            }
+        }
+
+        function desenharCartoes(t) {
+            const entregues = t.no_prazo + t.fora_prazo;
+            const cartoes = [
+                ['Pedidos', numero(t.pedidos), 'no período'],
+                ['No prazo', pct(t.no_prazo, entregues), `${numero(t.no_prazo)} dos ${numero(entregues)} entregues`],
+                ['Fora do prazo', numero(t.fora_prazo), `${pct(t.fora_prazo, entregues)} dos entregues`],
+                ['Sem entrega', numero(t.sem_entrega), `${pct(t.sem_entrega, t.pedidos)} dos pedidos`],
+                ['Pedido → faturamento CD', dias(t.soma_fat, t.n_fat), `média de ${numero(t.n_fat)} pedidos`],
+                ['Coleta → entrega CD', dias(t.soma_cd, t.n_cd), `média de ${numero(t.n_cd)} pedidos`],
+                ['Pedido → entrega cliente', dias(t.soma_ent, t.n_ent), `média de ${numero(t.n_ent)} pedidos`],
+            ];
+            document.getElementById('ind-cartoes').innerHTML = cartoes.map(([titulo, valor, detalhe]) => `
+                <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200">
+                    <p class="text-xs font-semibold text-slate-500">${esc(titulo)}</p>
+                    <p class="text-2xl font-bold text-[#003366] mt-1">${esc(valor)}</p>
+                    <p class="text-[11px] text-slate-400 mt-1">${esc(detalhe)}</p>
+                </div>`).join('');
+        }
+
+        function desenharGraficoMeses(grupos) {
+            const porMes = new Map(agruparPor(grupos, 'mes').map(m => [m.chave, m]));
+            // Todos os meses entre o primeiro e o último com pedidos (mês sem pedido aparece vazio)
+            const chaves = [...porMes.keys()].filter(Boolean).sort();
+            const meses = [];
+            let [a, m] = chaves[0].split('-').map(Number);
+            const [aFim, mFim] = chaves[chaves.length - 1].split('-').map(Number);
+            while (a < aFim || (a === aFim && m <= mFim)) {
+                const chave = `${a}-${String(m).padStart(2, '0')}`;
+                meses.push(porMes.get(chave) || { chave, pedidos: 0, no_prazo: 0, fora_prazo: 0, sem_entrega: 0, outros: 0 });
+                if (++m > 12) { m = 1; a++; }
+            }
+            const maior = Math.max(...meses.map(x => x.pedidos), 1);
+
+            document.getElementById('ind-legenda').innerHTML = SERIES_IND.map(s =>
+                `<span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-sm ${s.cor}"></span>${esc(s.nome)}</span>`).join('');
+
+            document.getElementById('ind-grafico').innerHTML = meses.map((x, i) => {
+                const visiveis = SERIES_IND.filter(s => x[s.campo] > 0);
+                const segmentos = visiveis.map((s, j) => `<div class="${s.cor} ${j === visiveis.length - 1 ? 'rounded-t' : ''}" style="height:${x[s.campo] / maior * 100}%"></div>`).join('');
+                return `
+                    <div class="flex-1 min-w-[40px] flex flex-col items-stretch cursor-default" data-i="${i}"
+                         onmouseenter="mostrarTooltipMes(this)" onmouseleave="esconderTooltipMes()">
+                        <p class="text-[11px] text-center text-slate-500 mb-1">${x.pedidos ? numero(x.pedidos) : ''}</p>
+                        <div class="h-52 flex flex-col-reverse gap-[2px] px-1.5 border-b border-slate-200 hover:bg-slate-50 rounded-t">${segmentos}</div>
+                        <p class="text-[11px] text-center text-slate-500 mt-1.5">${esc(nomeMes(x.chave))}</p>
+                    </div>`;
+            }).join('');
+            mesesGrafico = meses;
+        }
+
+        let mesesGrafico = [];
+
+        function mostrarTooltipMes(coluna) {
+            const x = mesesGrafico[Number(coluna.dataset.i)];
+            const tip = document.getElementById('ind-tooltip');
+            const entregues = x.no_prazo + x.fora_prazo;
+            tip.innerHTML = `
+                <p class="font-bold text-slate-800 mb-1.5">${esc(nomeMes(x.chave))} · ${numero(x.pedidos)} pedidos</p>
+                ${SERIES_IND.map(s => `
+                    <div class="flex items-center justify-between gap-4">
+                        <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-sm ${s.cor}"></span>${esc(s.nome)}</span>
+                        <span class="font-semibold">${numero(x[s.campo])}</span>
+                    </div>`).join('')}
+                <p class="text-slate-500 mt-1.5">No prazo: ${pct(x.no_prazo, entregues)} dos entregues</p>`;
+            const grafico = document.getElementById('ind-grafico');
+            const esquerda = coluna.offsetLeft - grafico.scrollLeft + coluna.offsetWidth + 8;
+            tip.style.left = `${Math.min(esquerda, grafico.clientWidth - 180)}px`;
+            tip.style.top = '0px';
+            tip.classList.remove('hidden');
+        }
+
+        function esconderTooltipMes() {
+            document.getElementById('ind-tooltip').classList.add('hidden');
+        }
+
+        function desenharTabelaSellers(grupos) {
+            const sellers = agruparPor(grupos, 'seller').sort((a, b) => b.pedidos - a.pedidos);
+            document.getElementById('tabela-ind-sellers').innerHTML = sellers.map(s => `
+                <tr class="hover:bg-slate-50">
+                    <td class="p-3 font-medium text-slate-900">${txt(s.chave)}</td>
+                    <td class="p-3 text-right">${numero(s.pedidos)}</td>
+                    <td class="p-3 text-right">${numero(s.no_prazo)}</td>
+                    <td class="p-3 text-right">${numero(s.fora_prazo)}</td>
+                    <td class="p-3 text-right">${numero(s.sem_entrega)}</td>
+                    <td class="p-3 text-right font-semibold text-[#003366]">${pct(s.no_prazo, s.no_prazo + s.fora_prazo)}</td>
+                    <td class="p-3 text-right">${dias(s.soma_fat, s.n_fat)}</td>
+                    <td class="p-3 text-right">${dias(s.soma_ent, s.n_ent)}</td>
+                </tr>`).join('');
         }
 
         function toggleFormAgendamento() {
@@ -648,93 +869,31 @@
                 ? '<tr><td colspan="8" class="p-4 text-center text-slate-400">Nenhum registo encontrado.</td></tr>'
                 : agendamentos.map(item => `
                     <tr class="hover:bg-slate-50">
-                        <td class="p-3 font-medium text-slate-900">${esc(item.seller || 'Sem dados')}</td>
-                        <td class="p-3">${esc(item.transportadora || 'Sem dados')}</td>
-                        <td class="p-3 font-semibold text-[#003366]">${esc(item.nota_fiscal || 'Sem dados')}</td>
-                        <td class="p-3 font-mono">${esc(item.cte || 'Sem dados')}</td>
+                        <td class="p-3 font-medium text-slate-900">${txt(item.seller)}</td>
+                        <td class="p-3">${txt(item.transportadora)}</td>
+                        <td class="p-3 font-semibold text-[#003366]">${txt(item.nota_fiscal)}</td>
+                        <td class="p-3 font-mono">${txt(item.cte)}</td>
                         <td class="p-3">${formatarData(item.data_coleta)}</td>
                         <td class="p-3">${formatarData(item.data_cte)}</td>
                         <td class="p-3">${formatarData(item.entrega_cd)}</td>
-                        <td class="p-3"><span class="bg-sky-100 text-sky-800 text-xs px-2.5 py-1 rounded-full font-medium">${esc(item.status_etapa || 'Pendente')}</span></td>
+                        <td class="p-3"><span class="bg-sky-100 text-sky-800 text-xs px-2.5 py-1 rounded-full font-medium">${txt(item.status_etapa)}</span></td>
                     </tr>`).join('');
         }
 
-        async function consultarOperacao(e) {
-            e.preventDefault();
-            const nf = document.getElementById('filtro_nf').value.trim();
-            const sellerSelecionado = document.getElementById('filtro_seller').value;
-            const resBox = document.getElementById('resultado-pesquisa');
-            const foundEl = document.getElementById('res-encontrado');
-            const notFoundEl = document.getElementById('res-nao-encontrado');
-            const latamContainer = document.getElementById('res-latam-container');
-
-            resBox.classList.remove('hidden');
-            document.getElementById('res-nf').textContent = nf;
-            notFoundEl.textContent = 'Nenhuma coleta encontrada com esses dados.';
-
-            const ehBrascol = sellerSelecionado.toUpperCase().includes('BRASCOL');
-            latamContainer.classList.toggle('hidden', !ehBrascol);
-
-            try {
-                // tracking = Databricks (coleta, CT-e, embarque, entrega no CD)
-                // entrega  = pedido do marketplace (faturamento CD e entrega ao cliente)
-                // coleta   = coleta LATAM incluída no portal (datas digitadas e liberação do admin)
-                const { tracking, entrega, coleta } = await api('/api/consulta?nf=' + encodeURIComponent(nf));
-                const t = tracking || {};
-                const en = entrega || {};
-                const co = coleta || {};
-                if (tracking || entrega || coleta) {
-                    foundEl.classList.remove('hidden');
-                    notFoundEl.classList.add('hidden');
-
-                    // Da etapa mais avançada para a menos avançada
-                    let ultimoStatus = 'Em processamento';
-                    if (en.dt_entrega) {
-                        ultimoStatus = 'Entregue ao Cliente';
-                    } else if (en.dt_faturamento) {
-                        ultimoStatus = 'Faturamento CD Concluído';
-                    } else if (t.data_entrega || co.entrega_cd) {
-                        ultimoStatus = 'Entregue no CD';
-                    } else if (t.data_embarque) {
-                        ultimoStatus = 'Embarcado';
-                    } else if (t.emissao_cte || co.data_cte) {
-                        ultimoStatus = 'CTE Emitido';
-                    } else if (t.data_coleta || co.data_coleta) {
-                        ultimoStatus = 'Coleta Realizada';
-                    } else if (t.emissao) {
-                        ultimoStatus = 'Nota Fiscal Emitida pelo Seller';
-                    } else if (co.status_etapa) {
-                        ultimoStatus = co.status_etapa;
-                    }
-
-                    document.getElementById('res-etapa').textContent = ultimoStatus;
-                    if (ehBrascol) {
-                        document.getElementById('res-latam').textContent = !coleta
-                            ? 'Coleta não incluída'
-                            : co.liberado_latam ? 'Liberado para o CD' : 'Aguardando liberação do admin';
-                    }
-                } else {
-                    foundEl.classList.add('hidden');
-                    notFoundEl.classList.remove('hidden');
-                }
-            } catch (err) {
-                foundEl.classList.add('hidden');
-                notFoundEl.classList.remove('hidden');
-                notFoundEl.textContent = err.message;
-            }
-        }
-
+        // As abas do CD e do Admin buscam a própria lista no servidor sempre que abrem
+        // (a do CD traz todas as liberadas, não só as 100 mais recentes)
         async function carregarCdLatam() {
             const tbody = document.getElementById('tabela-cd-latam');
+            tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>';
             try {
-                const filtrados = agendamentos.filter(a => a.transportadora?.toUpperCase() === 'LATAM' && a.liberado_latam === 1);
+                const filtrados = await api('/api/agendamentos?escopo=cd');
                 tbody.innerHTML = filtrados.length === 0
                     ? '<tr><td colspan="7" class="p-4 text-center text-slate-400">Nenhuma carga LATAM disponível no momento.</td></tr>'
                     : filtrados.map(item => `
                         <tr class="hover:bg-slate-50">
-                            <td class="p-3 font-medium text-slate-900">${esc(item.seller || 'Sem dados')}</td>
-                            <td class="p-3 font-semibold text-[#003366]">${esc(item.nota_fiscal || 'Sem dados')}</td>
-                            <td class="p-3 font-mono">${esc(item.cte || 'Sem dados')}</td>
+                            <td class="p-3 font-medium text-slate-900">${txt(item.seller)}</td>
+                            <td class="p-3 font-semibold text-[#003366]">${txt(item.nota_fiscal)}</td>
+                            <td class="p-3 font-mono">${txt(item.cte)}</td>
                             <td class="p-3">${formatarData(item.data_coleta)}</td>
                             <td class="p-3">${formatarData(item.data_cte)}</td>
                             <td class="p-3">${formatarData(item.entrega_cd)}</td>
@@ -747,16 +906,17 @@
 
         async function carregarAdminSinalizacao() {
             const tbody = document.getElementById('tabela-admin-sinalizacao');
+            tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">A carregar painel admin...</td></tr>';
             try {
-                const latamItens = agendamentos.filter(a => a.transportadora?.toUpperCase() === 'LATAM');
+                const latamItens = await api('/api/agendamentos?escopo=admin');
                 tbody.innerHTML = latamItens.length === 0
                     ? '<tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhum registo LATAM encontrado.</td></tr>'
                     : latamItens.map(item => `
                         <tr class="hover:bg-slate-50">
-                            <td class="p-3 font-medium text-slate-900">${esc(item.seller || 'Sem dados')}</td>
-                            <td class="p-3">${esc(item.transportadora || 'Sem dados')}</td>
-                            <td class="p-3 font-semibold text-[#003366]">${esc(item.nota_fiscal || 'Sem dados')}</td>
-                            <td class="p-3 font-mono">${esc(item.cte || 'Sem dados')}</td>
+                            <td class="p-3 font-medium text-slate-900">${txt(item.seller)}</td>
+                            <td class="p-3">${txt(item.transportadora)}</td>
+                            <td class="p-3 font-semibold text-[#003366]">${txt(item.nota_fiscal)}</td>
+                            <td class="p-3 font-mono">${txt(item.cte)}</td>
                             <td class="p-3">
                                 <span class="${item.liberado_latam ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'} text-xs px-2.5 py-1 rounded-full font-medium">
                                     ${item.liberado_latam ? 'Liberado' : 'Bloqueado'}
@@ -779,8 +939,8 @@
                     method: 'PATCH',
                     body: JSON.stringify({ liberado_latam: novoEstado }),
                 });
-                await carregarAgendamentos();
-                carregarAdminSinalizacao();
+                carregarAgendamentos();
+                await carregarAdminSinalizacao();
             } catch (err) {
                 alert('Erro ao atualizar liberação: ' + err.message);
             }

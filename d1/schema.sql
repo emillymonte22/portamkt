@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS agendamentos (
 );
 
 -- Tabelas espelhadas do Databricks (preenchidas pelo Job databricks/sync_d1.py).
--- Não editar dados nestas tabelas pelo portal: o Job sobrescreve a cada hora.
+-- Não editar dados nestas tabelas pelo portal: o Job sobrescreve 1x por dia (8h de Manaus).
 -- row_hash = sha256 da linha inteira; identifica cada linha já que a origem não tem chave única.
 
 -- Origem: comercial.logint.f_tracking_aereo (um item de NF por linha)
@@ -100,11 +100,11 @@ CREATE TABLE IF NOT EXISTS entregas_mkt (
   data_entrega                   TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_entregas_seller ON entregas_mkt (n_fornecedor, dt_pedido);
-CREATE INDEX IF NOT EXISTS idx_entregas_pedido ON entregas_mkt (pedido);
+CREATE INDEX IF NOT EXISTS idx_entregas_compra ON entregas_mkt (pedido_compra);
 CREATE INDEX IF NOT EXISTS idx_entregas_ordem  ON entregas_mkt (ordem);
 CREATE INDEX IF NOT EXISTS idx_entregas_nf     ON entregas_mkt (nf);
 CREATE INDEX IF NOT EXISTS idx_entregas_nf_exp ON entregas_mkt (nota_fiscal_explode);
-CREATE INDEX IF NOT EXISTS idx_entregas_data   ON entregas_mkt (dt_pedido DESC, pedido DESC);
+CREATE INDEX IF NOT EXISTS idx_entregas_data_compra ON entregas_mkt (dt_pedido DESC, pedido_compra DESC);
 
 -- Uma linha por execução do Job, para o portal mostrar "atualizado em ..."
 CREATE TABLE IF NOT EXISTS sync_log (

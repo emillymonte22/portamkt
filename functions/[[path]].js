@@ -33,7 +33,14 @@ export async function onRequest(context) {
     if (path === '/api/me' && request.method === 'GET') return Response.json(usuario);
 
     if (path === '/api/agendamentos') {
-      if (request.method === 'GET') return await listarAgendamentos(env);
+      if (request.method === 'GET') {
+        const escopo = url.searchParams.get('escopo') || '';
+        if (escopo === 'cd' && !['cd', 'admin'].includes(usuario.perfil)) return erro(403, 'Apenas CD e administrador');
+        if (escopo === 'admin' && usuario.perfil !== 'admin') return erro(403, 'Apenas o administrador');
+        // O CD só vê as coletas liberadas (escopo=cd), não a lista geral de inclusão
+        if (escopo === '' && usuario.perfil === 'cd') return erro(403, 'O CD vê as coletas na aba Disponível para Coleta');
+        return await listarAgendamentos(env, escopo);
+      }
       if (request.method === 'POST') {
         if (usuario.perfil !== 'admin') return erro(403, 'Apenas o administrador pode incluir coletas');
         return await criarAgendamento(request, env);
@@ -48,8 +55,8 @@ export async function onRequest(context) {
 
     if (path === '/api/entregas' && request.method === 'GET') return await listarEntregas(env, url.searchParams);
     if (path === '/api/entregas/filtros' && request.method === 'GET') return await filtrosEntregas(env);
+    if (path === '/api/indicadores' && request.method === 'GET') return await indicadores(env, url.searchParams);
     if (path === '/api/tracking' && request.method === 'GET') return await listarTracking(env, url.searchParams);
-    if (path === '/api/consulta' && request.method === 'GET') return await consultarNf(env, url.searchParams);
     if (path === '/api/sync-status' && request.method === 'GET') return await statusSync(env);
 
     return erro(404, 'Rota não encontrada');
@@ -71,16 +78,18 @@ async function login(request, env) {
     .bind(username).first();
 
   let valido = false;
+  let senhaGravada = user?.senha;
   if (user && user.senha.startsWith('pbkdf2$')) {
     valido = await verificarSenha(senha, user.senha);
   } else if (user) {
-    // Senha ainda em texto puro (cadastro antigo): confere e tenta converter para hash.
+    // Senha ainda em texto puro (cadastro antigo ou senha trocada pelo wrangler): confere e tenta converter para hash.
     // Se a gravação falhar (ex.: limite diário do D1), o login segue e tenta de novo na próxima vez.
     valido = iguais(senha, user.senha);
     if (valido) {
       try {
-        await env.DB.prepare('UPDATE usuarios SET senha = ? WHERE id = ?')
-          .bind(await gerarHashSenha(senha), user.id).run();
+        const hash = await gerarHashSenha(senha);
+        await env.DB.prepare('UPDATE usuarios SET senha = ? WHERE id = ?').bind(hash, user.id).run();
+        senhaGravada = hash;
       } catch (err) {
         console.error('Não foi possível converter a senha para hash', err);
       }
@@ -89,7 +98,11 @@ async function login(request, env) {
   if (!valido) return erro(401, 'Utilizador ou senha incorretos');
 
   const sessao = { username: user.username, perfil: user.perfil };
-  const token = await assinar({ ...sessao, exp: Math.floor(Date.now() / 1000) + SESSAO_SEGUNDOS }, env.SESSION_SECRET);
+  const token = await assinar({
+    ...sessao,
+    ver: await versaoSenha(senhaGravada, env.SESSION_SECRET),
+    exp: Math.floor(Date.now() / 1000) + SESSAO_SEGUNDOS,
+  }, env.SESSION_SECRET);
   return Response.json(sessao, {
     headers: { 'Set-Cookie': `sessao=${token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=${SESSAO_SEGUNDOS}` },
   });
@@ -112,7 +125,18 @@ async function lerSessao(request, env) {
 
   const dados = JSON.parse(new TextDecoder().decode(deBase64Url(corpo)));
   if (dados.exp < Date.now() / 1000) return null;
-  return { username: dados.username, perfil: dados.perfil };
+
+  // Confere o usuário no banco a cada requisição (1 linha, pelo índice de username): usuário apagado,
+  // perfil alterado ou senha trocada valem na hora, sem esperar as 8 horas do cookie.
+  const user = await env.DB.prepare('SELECT username, senha, perfil FROM usuarios WHERE username = ?')
+    .bind(dados.username).first();
+  if (!user || !iguais(String(dados.ver || ''), await versaoSenha(user.senha, env.SESSION_SECRET))) return null;
+  return { username: user.username, perfil: user.perfil };
+}
+
+// Marca da senha gravada no cookie: se a senha mudar no banco, as sessões abertas com a senha antiga caem
+async function versaoSenha(senhaGravada, segredo) {
+  return (await hmac(`senha:${senhaGravada}`, segredo)).slice(0, 16);
 }
 
 async function assinar(dados, segredo) {
@@ -156,8 +180,18 @@ function deBase64Url(texto) {
 
 // ---------- Agendamentos ----------
 
-async function listarAgendamentos(env) {
-  const { results } = await env.DB.prepare('SELECT * FROM agendamentos ORDER BY id DESC LIMIT 100').all();
+// Consultas: últimos 100. CD: todas as coletas LATAM liberadas. Admin: todas as LATAM, bloqueadas primeiro.
+// A tabela é pequena (digitada no portal); o LIMIT é só uma proteção (regra 12).
+const SQL_AGENDAMENTOS = {
+  '': 'SELECT * FROM agendamentos ORDER BY id DESC LIMIT 100',
+  cd: `SELECT * FROM agendamentos WHERE UPPER(transportadora) = 'LATAM' AND liberado_latam = 1 ORDER BY id DESC LIMIT 1000`,
+  admin: `SELECT * FROM agendamentos WHERE UPPER(transportadora) = 'LATAM' ORDER BY liberado_latam, id DESC LIMIT 1000`,
+};
+
+async function listarAgendamentos(env, escopo) {
+  const sql = SQL_AGENDAMENTOS[escopo];
+  if (!sql) return erro(400, 'escopo inválido');
+  const { results } = await env.DB.prepare(sql).all();
   return Response.json(results);
 }
 
@@ -245,25 +279,28 @@ async function listarEntregas(env, p) {
     valores.push(ate);
   }
 
-  // Paginação por cursor (data + pedido do último item da página anterior): usa o índice
-  // idx_entregas_data e lê só as linhas da página, em vez de pular linhas com OFFSET.
+  // A lista é por pedido de compra; linhas sem pedido_compra não aparecem (e quebrariam o cursor)
+  filtros.push('pedido_compra IS NOT NULL');
+
+  // Paginação por cursor (data + pedido de compra do último item da página anterior): usa o índice
+  // idx_entregas_data_compra e lê só as linhas da página, em vez de pular linhas com OFFSET.
   const aposData = p.get('apos_data');
-  const aposPedido = Number(p.get('apos_pedido'));
-  if (aposData && aposPedido) {
-    filtros.push('(dt_pedido, pedido) < (?, ?)');
-    valores.push(aposData, aposPedido);
+  const aposPedidoCompra = Number(p.get('apos_pedido_compra'));
+  if (aposData && aposPedidoCompra) {
+    filtros.push('(dt_pedido, pedido_compra) < (?, ?)');
+    valores.push(aposData, aposPedidoCompra);
   }
 
   if (!busca) return Response.json(await paginaEntregas(env, filtros, valores));
 
-  // Busca por número de NF, pedido ou ordem (aceita digitar com pontos, traços etc.)
+  // Busca por número de NF, pedido de compra ou ordem (aceita digitar com pontos, traços etc.)
   const numero = busca.replace(/\D/g, '');
-  if (!numero || numero.length > 18) return erro(400, 'Busque por número de NF, pedido ou ordem');
+  if (!numero || numero.length > 18) return erro(400, 'Busque por número de NF, pedido de compra ou ordem');
 
   // 1º: número exato, usando os índices (leve)
   const n = Number(numero);
   const exata = await paginaEntregas(env,
-    [...filtros, '(nf = ? OR pedido = ? OR ordem = ? OR nota_fiscal_explode = ?)'],
+    [...filtros, '(nf = ? OR pedido_compra = ? OR ordem = ? OR nota_fiscal_explode = ?)'],
     [...valores, n, n, n, nfTracking(numero)]);
   if (exata.itens.length || aposData || numero.length < 4) return Response.json(exata);
 
@@ -277,25 +314,25 @@ async function listarEntregas(env, p) {
     valoresParcial.push(`${ano}-01-01`, `${ano}-12-31`);
   }
   const contem = `%${numero}%`;
-  filtrosParcial.push('(CAST(pedido AS TEXT) LIKE ? OR CAST(ordem AS TEXT) LIKE ? OR CAST(nf AS TEXT) LIKE ? OR nota_fiscal_explode LIKE ?)');
+  filtrosParcial.push('(CAST(pedido_compra AS TEXT) LIKE ? OR CAST(ordem AS TEXT) LIKE ? OR CAST(nf AS TEXT) LIKE ? OR nota_fiscal_explode LIKE ?)');
   valoresParcial.push(contem, contem, contem, contem);
   return Response.json(await paginaEntregas(env, filtrosParcial, valoresParcial));
 }
 
-// Busca até 3x o tamanho da página e junta as linhas repetidas do mesmo pedido
+// Busca até 3x o tamanho da página e junta as linhas repetidas do mesmo pedido de compra
 // (elas vêm lado a lado por causa da ordenação), sem GROUP BY, que obrigaria a ler tudo.
 async function paginaEntregas(env, filtros, valores) {
   const where = filtros.length ? `WHERE ${filtros.join(' AND ')}` : '';
   const limite = ITENS_POR_PAGINA * 3;
   const { results } = await env.DB.prepare(
-    `SELECT * FROM entregas_mkt ${where} ORDER BY dt_pedido DESC, pedido DESC LIMIT ?`
+    `SELECT * FROM entregas_mkt ${where} ORDER BY dt_pedido DESC, pedido_compra DESC LIMIT ?`
   ).bind(...valores, limite).all();
 
   const linhas = results || [];
   const itens = [];
   for (const linha of linhas) {
     const anterior = itens[itens.length - 1];
-    if (anterior && linha.pedido !== null && anterior.pedido === linha.pedido) continue;
+    if (anterior && anterior.pedido_compra === linha.pedido_compra) continue;
     itens.push(linha);
   }
   const pagina = itens.slice(0, ITENS_POR_PAGINA);
@@ -303,7 +340,7 @@ async function paginaEntregas(env, filtros, valores) {
   return {
     itens: pagina,
     tem_mais: itens.length > ITENS_POR_PAGINA || linhas.length === limite,
-    proximo: ultimo ? { apos_data: ultimo.dt_pedido, apos_pedido: ultimo.pedido } : null,
+    proximo: ultimo ? { apos_data: ultimo.dt_pedido, apos_pedido_compra: ultimo.pedido_compra } : null,
     por_pagina: ITENS_POR_PAGINA,
   };
 }
@@ -325,6 +362,58 @@ async function filtrosEntregas(env) {
   return Response.json(cacheFiltros.dados);
 }
 
+// Indicadores por seller e mês (a tela soma os grupos para os totais).
+// Uma consulta só, que lê as linhas do período uma vez (regra 12); a tabela muda 1x por dia, então o
+// resultado fica em cache por 30 min para a mesma combinação de filtros.
+// Cada pedido conta uma vez: as linhas repetidas do mesmo pedido são juntadas no GROUP BY pedido.
+const cacheIndicadores = new Map();
+
+async function indicadores(env, p) {
+  const ano = new Date().getFullYear();
+  const de = p.get('de') || `${ano}-01-01`;
+  const ate = p.get('ate') || `${ano}-12-31`;
+  if (![de, ate].every(d => /^\d{4}-\d{2}-\d{2}$/.test(d))) return erro(400, 'Datas inválidas');
+  if (de > ate) return erro(400, 'A data inicial é maior que a final');
+  const seller = p.get('seller') || '';
+
+  const chave = JSON.stringify([de, ate, seller]);
+  const guardado = cacheIndicadores.get(chave);
+  if (guardado && Date.now() - guardado.em < CACHE_FILTROS_MS) return Response.json(guardado.dados);
+
+  const filtros = ['dt_pedido BETWEEN ? AND ?', 'pedido IS NOT NULL'];
+  const valores = [de, ate];
+  if (seller) {
+    filtros.push('n_fornecedor = ?');
+    valores.push(seller);
+  }
+
+  // Prazos em dias só contam quando as duas datas existem e a diferença não é negativa
+  const { results } = await env.DB.prepare(
+    `WITH base AS (
+       SELECT pedido,
+              MAX(n_fornecedor) AS seller, MAX(dt_pedido) AS dt_pedido, UPPER(TRIM(MAX(no_prazo))) AS status,
+              julianday(MAX(dt_faturamento)) - julianday(MAX(dt_pedido)) AS d_fat,
+              julianday(MAX(dt_entrega))     - julianday(MAX(dt_pedido)) AS d_ent,
+              julianday(MAX(data_entrega))   - julianday(MAX(data_coleta)) AS d_cd
+       FROM entregas_mkt WHERE ${filtros.join(' AND ')}
+       GROUP BY pedido
+     )
+     SELECT seller, substr(dt_pedido, 1, 7) AS mes, COUNT(*) AS pedidos,
+            SUM(status = 'NO PRAZO') AS no_prazo,
+            SUM(status = 'FORA DO PRAZO') AS fora_prazo,
+            SUM(status = 'SEM ENTREGA') AS sem_entrega,
+            SUM(CASE WHEN d_fat >= 0 THEN d_fat END) AS soma_fat, COUNT(CASE WHEN d_fat >= 0 THEN 1 END) AS n_fat,
+            SUM(CASE WHEN d_ent >= 0 THEN d_ent END) AS soma_ent, COUNT(CASE WHEN d_ent >= 0 THEN 1 END) AS n_ent,
+            SUM(CASE WHEN d_cd  >= 0 THEN d_cd  END) AS soma_cd,  COUNT(CASE WHEN d_cd  >= 0 THEN 1 END) AS n_cd
+     FROM base GROUP BY seller, mes ORDER BY mes, seller`
+  ).bind(...valores).all();
+
+  const dados = { de, ate, seller, grupos: results || [] };
+  if (cacheIndicadores.size > 50) cacheIndicadores.clear();
+  cacheIndicadores.set(chave, { em: Date.now(), dados });
+  return Response.json(dados);
+}
+
 async function listarTracking(env, p) {
   const nf = (p.get('nf') || '').trim();
   if (!/^\d{1,10}$/.test(nf)) return erro(400, 'Informe a NF (só números)');
@@ -332,30 +421,6 @@ async function listarTracking(env, p) {
     'SELECT * FROM tracking_aereo WHERE nota_fiscal_explode = ? ORDER BY descricao_material'
   ).bind(nfTracking(nf)).all();
   return Response.json(results || []);
-}
-
-// Consulta de uma NF juntando as três fontes: tracking (coleta/CT-e/embarque/entrega no CD),
-// pedido do marketplace (faturamento e entrega ao cliente) e a coleta LATAM incluída no portal.
-async function consultarNf(env, p) {
-  const numero = (p.get('nf') || '').replace(/\D/g, '').replace(/^0+/, '');
-  if (!numero || numero.length > 10) return erro(400, 'Informe a NF (só números)');
-
-  const [tracking, entrega, coleta] = await env.DB.batch([
-    env.DB.prepare('SELECT * FROM tracking_aereo WHERE nota_fiscal_explode = ? LIMIT 1').bind(nfTracking(numero)),
-    env.DB.prepare(
-      `SELECT pedido, n_fornecedor, dt_faturamento, dt_entrega, no_prazo, nf
-       FROM entregas_mkt WHERE nota_fiscal_explode = ? ORDER BY dt_entrega DESC, dt_faturamento DESC LIMIT 1`
-    ).bind(nfTracking(numero)),
-    // agendamentos.nota_fiscal guarda várias NFs separadas por "/" (tabela pequena)
-    env.DB.prepare(`SELECT * FROM agendamentos WHERE '/' || nota_fiscal || '/' LIKE ? ORDER BY id DESC LIMIT 1`)
-      .bind(`%/${numero}/%`),
-  ]);
-
-  return Response.json({
-    tracking: tracking.results[0] || null,
-    entrega: entrega.results[0] || null,
-    coleta: coleta.results[0] || null,
-  });
 }
 
 function nfTracking(nf) {
