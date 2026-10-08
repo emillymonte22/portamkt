@@ -174,7 +174,6 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 
 ## 11. Pendências conhecidas
 
-- **Sinalizador do CD (08/10):** aplicar `d1/migracao_008_sinalizador_cd.sql` ANTES de publicar o código (sem ela, incluir/liberar coleta dá "Erro interno"). Depois, remova este item.
 - **Base geral (07/10):** migração 007 aplicada, código publicado e notebook enviado sem rodar. A 1ª carga (~18 mil linhas × 4 ≈ 72 mil gravações) fica para o Job de **08/10 às 12h** (o limite de 100 mil gravações zera à meia-noite UTC = 20h de Manaus). A 1ª carga saiu no Job de 08/10 às 8h (17.666 linhas; Entrega CD em 8.129 pedidos). Falta: aplicar o horário 8h e 12h no Databricks (`ferramentas\atualizar_agendamento.ps1`, rodado pela Emilly); apagar `controle_aereo` e, se nada mais usar, parar de sincronizar `entregas_mkt`. Depois, remova este item.
 - Compartilhar o Job e a pasta do notebook com `carlossimoes@bemol.com.br` (Can Manage): a Emilly faz pela interface do Databricks (Permissions).
 - Traduzir os códigos da coluna `etapa` (`MANIFEST_01`, `VLPOSTNG_01`, …) para nomes legíveis.
