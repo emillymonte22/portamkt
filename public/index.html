@@ -394,7 +394,7 @@
                                                 <th class="p-2.5 border border-slate-200 text-center">MÊS</th>
                                                 <th class="p-2.5 border border-slate-200 text-center">COLETAS</th>
                                                 <th class="p-2.5 border border-slate-200 text-center">VALOR TOTAL</th>
-                                                <th class="p-2.5 border border-slate-200 text-center">Lead Time<br>Coleta x CD</th>
+                                                <th class="p-2.5 border border-slate-200 text-center">Lead Time<br>Coleta x CD (Logística)</th>
                                                 <th class="p-2.5 border border-slate-200 text-center">Lead Time<br>Pedido x Entrega Cliente</th>
                                             </tr>
                                         </thead>
@@ -411,7 +411,7 @@
                                                 <th class="p-2.5 border border-slate-200 text-center">ORIGEM</th>
                                                 <th class="p-2.5 border border-slate-200 text-center">COLETAS</th>
                                                 <th class="p-2.5 border border-slate-200 text-center">VALOR TOTAL</th>
-                                                <th class="p-2.5 border border-slate-200 text-center">Lead Time<br>Coleta x CD</th>
+                                                <th class="p-2.5 border border-slate-200 text-center">Lead Time<br>Coleta x CD (Logística)</th>
                                             </tr>
                                         </thead>
                                         <tbody id="tabela-resumo-origem"></tbody>
@@ -435,7 +435,7 @@
                                             <th class="p-3 text-right">Fora do prazo</th>
                                             <th class="p-3 text-right">Sem entrega</th>
                                             <th class="p-3 text-right">% no prazo</th>
-                                            <th class="p-3 text-right">Coleta → Entrega CD</th>
+                                            <th class="p-3 text-right">Coleta → Entrega CD (Logística)</th>
                                             <th class="p-3 text-right">Pedido → entrega cliente</th>
                                         </tr>
                                     </thead>
@@ -1194,7 +1194,7 @@
                 ['No prazo', pct(t.no_prazo, entregues), `${numero(t.no_prazo)} dos ${numero(entregues)} entregues`],
                 ['Fora do prazo', numero(t.fora_prazo), `${pct(t.fora_prazo, entregues)} dos entregues`],
                 ['Sem entrega', numero(t.sem_entrega), `${pct(t.sem_entrega, t.pedidos)} dos pedidos`],
-                ['Coleta → entrega CD', dias(t.soma_cd, t.n_cd), `média de ${numero(t.n_cd)} pedidos`],
+                ['Coleta → Entrega CD (Logística)', dias(t.soma_cd, t.n_cd), `média de ${numero(t.n_cd)} pedidos`],
                 ['Pedido → entrega cliente', dias(t.soma_ent, t.n_ent), `média de ${numero(t.n_ent)} pedidos`],
             ];
             document.getElementById('ind-cartoes').innerHTML = cartoes.map(([titulo, valor, detalhe]) => `
