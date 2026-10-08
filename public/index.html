@@ -327,6 +327,10 @@
                         </form>
                     </div>
 
+                    <!-- Cartões: logo abaixo dos filtros, acima do lead time (pedido da Emilly em 08/10) -->
+                    <p id="ind-aviso" class="hidden p-6 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200"></p>
+                    <div id="ind-cartoes" class="hidden grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-4"></div>
+
                     <!-- Lead time semanal (filtros próprios de seller e UF) -->
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <div class="flex flex-wrap justify-between items-end gap-4 mb-4">
@@ -360,12 +364,7 @@
                         </div>
                     </div>
 
-                    <p id="ind-aviso" class="hidden p-6 text-center text-sm text-slate-400 bg-white rounded-2xl border border-slate-200"></p>
-
                     <div id="ind-resultado" class="space-y-6 hidden">
-                        <!-- Cartões -->
-                        <div id="ind-cartoes" class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-4"></div>
-
                         <!-- Pedidos por mês -->
                         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                             <div class="flex flex-wrap justify-between items-start gap-2 mb-4">
@@ -1164,7 +1163,9 @@
                 if (v) params.set(param, v);
             }
 
+            const cartoes = document.getElementById('ind-cartoes');
             resultado.classList.add('hidden');
+            cartoes.classList.add('hidden');
             aviso.textContent = 'A calcular indicadores...';
             aviso.classList.remove('hidden');
             try {
@@ -1176,6 +1177,7 @@
                 }
                 aviso.classList.add('hidden');
                 resultado.classList.remove('hidden');
+                cartoes.classList.remove('hidden');
                 desenharCartoes(somarGrupos(dados.grupos));
                 desenharGraficoMeses(dados.grupos);
                 desenharTabelaSellers(dados.grupos);
