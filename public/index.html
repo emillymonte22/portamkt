@@ -72,6 +72,8 @@
                 <button onclick="mudarAba('cd-coleta')" id="menu-cd-coleta" class="w-full hidden items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition border border-emerald-600/40 mt-4">
                     <span>📦</span>
                     <span>Disponível para Coleta (LATAM)</span>
+                    <!-- Aviso de coleta nova: quantas liberadas o CD ainda não viu -->
+                    <span id="badge-cd" class="hidden ml-auto bg-red-600 text-white text-[11px] font-bold min-w-[22px] text-center px-1.5 py-0.5 rounded-full" title="Coletas novas liberadas para o CD"></span>
                 </button>
 
                 <!-- Menu Exclusivo Admin -->
@@ -211,8 +213,10 @@
                                 </div>
                                 <div>
                                     <label class="block text-xs font-semibold text-slate-600 mb-1">Nota Fiscal (NF)</label>
-                                    <input type="text" id="novo_nf" required placeholder="Ex: 617944/617945" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+                                    <input type="text" id="novo_nf" required placeholder="Ex: 617944/617945" onchange="preencherPelaPlanilha()" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+                                    <input type="hidden" id="novo_ncoleta">
                                 </div>
+                                <p id="novo_aviso_planilha" class="hidden md:col-span-3 text-xs px-3 py-2 rounded-lg"></p>
                                 <div>
                                     <label class="block text-xs font-semibold text-slate-600 mb-1">CT-e</label>
                                     <input type="text" id="novo_cte" placeholder="Número do CT-e" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
@@ -422,7 +426,7 @@
                         <div class="flex justify-between items-center mb-4">
                             <div>
                                 <h3 class="text-base font-bold text-slate-800">Cargas Disponíveis para Coleta — LATAM</h3>
-                                <p class="text-xs text-slate-500">Cargas sinalizadas como liberadas ou incluídas para recolha no CD01</p>
+                                <p class="text-xs text-slate-500">Cargas liberadas pelo admin para o CD01 · novas primeiro · confirme a coleta e o recebimento no CD</p>
                             </div>
                             <span class="bg-emerald-100 text-emerald-800 text-xs px-3 py-1 rounded-full font-bold">CD01 / Operacional</span>
                         </div>
@@ -436,11 +440,13 @@
                                         <th class="p-3">Data Coleta</th>
                                         <th class="p-3">Data CT-e</th>
                                         <th class="p-3">Entrega CD</th>
-                                        <th class="p-3">Estado no CD</th>
+                                        <th class="p-3">Liberada em</th>
+                                        <th class="p-3">Situação no CD</th>
+                                        <th class="p-3 text-center">Ação</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tabela-cd-latam" class="divide-y divide-slate-200">
-                                    <tr><td colspan="7" class="p-4 text-center text-slate-400">Nenhuma carga liberada no momento.</td></tr>
+                                    <tr><td colspan="9" class="p-4 text-center text-slate-400">Nenhuma carga liberada no momento.</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -462,11 +468,38 @@
                                         <th class="p-3">NF</th>
                                         <th class="p-3">CT-e</th>
                                         <th class="p-3">Status Atual</th>
+                                        <th class="p-3">Situação no CD</th>
                                         <th class="p-3 text-center">Ação / Sinalização</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tabela-admin-sinalizacao" class="divide-y divide-slate-200">
-                                    <tr><td colspan="6" class="p-4 text-center text-slate-400">A carregar painel admin...</td></tr>
+                                    <tr><td colspan="7" class="p-4 text-center text-slate-400">A carregar painel admin...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Coletas LATAM da planilha ainda a caminho, que ainda não estão no portal -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <h3 class="text-base font-bold text-slate-800 mb-1">Coletas LATAM da planilha a caminho</h3>
+                        <p class="text-xs text-slate-500 mb-4">Da sua planilha CONTROLE_AÉREO (status TRANSITO, PROGRAMADO, AGENDADO ou SEFAZ), cruzada com as bases do Databricks. "Liberar para o CD" inclui a coleta no portal já liberada e avisa o CD01.</p>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm text-slate-600">
+                                <thead class="bg-slate-50 text-slate-700 uppercase text-xs">
+                                    <tr>
+                                        <th class="p-3">Coleta</th>
+                                        <th class="p-3">Seller</th>
+                                        <th class="p-3">NF</th>
+                                        <th class="p-3">CT-e</th>
+                                        <th class="p-3">Data Coleta</th>
+                                        <th class="p-3">Embarque (= CT-e)</th>
+                                        <th class="p-3">Previsão</th>
+                                        <th class="p-3">Status na planilha</th>
+                                        <th class="p-3 text-center">Ação</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabela-admin-planilha" class="divide-y divide-slate-200">
+                                    <tr><td colspan="9" class="p-4 text-center text-slate-400">A carregar...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -618,6 +651,142 @@
             carregarStatusSync();
             if (currentUser.perfil !== 'cd') carregarAgendamentos();
             // Pedidos Marketplace só carregam quando a pessoa clica em Pesquisar
+            // Aviso de coleta nova (CD e admin): agora e a cada 5 min enquanto o portal estiver aberto
+            if (['cd', 'admin'].includes(currentUser.perfil)) {
+                atualizarAvisoCd();
+                if (!timerAvisoCd) timerAvisoCd = setInterval(atualizarAvisoCd, 5 * 60 * 1000);
+            }
+        }
+
+        // ---------- Sinalizador do CD01 ----------
+        let timerAvisoCd = null;
+
+        async function atualizarAvisoCd() {
+            try {
+                const { novas } = await api('/api/agendamentos/novas');
+                const badge = document.getElementById('badge-cd');
+                badge.textContent = novas > 99 ? '99+' : String(novas);
+                badge.classList.toggle('hidden', !novas);
+            } catch (err) { console.error(err); }
+        }
+
+        // Data e hora (ISO UTC gravado pela API) no horário de Manaus
+        function formatarDataHora(iso) {
+            if (!iso) return '—';
+            const d = new Date(iso);
+            return isNaN(d) ? '—' : d.toLocaleString('pt-BR', { timeZone: 'America/Manaus', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        }
+
+        function seloSituacaoCd(item) {
+            const nova = item.liberado_latam && !item.visto_cd_em
+                ? '<span class="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold mr-1">NOVA</span>' : '';
+            const status = item.status_cd || 'pendente';
+            const selo = status === 'recebido'
+                ? `<span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap">Recebido no CD · ${formatarDataHora(item.recebido_em)}</span>`
+                : status === 'coletado'
+                    ? `<span class="bg-sky-100 text-sky-800 text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap">Coletado · ${formatarDataHora(item.coletado_em)}</span>`
+                    : '<span class="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap">Aguardando coleta</span>';
+            const quem = item.confirmado_por && status !== 'pendente' ? `<div class="text-[10px] text-slate-400 mt-1">por ${esc(item.confirmado_por)}</div>` : '';
+            return `<div class="flex items-center">${nova}${selo}</div>${quem}`;
+        }
+
+        function acoesCd(item) {
+            const botao = (acao, texto, cor) =>
+                `<button onclick="confirmarCd(${item.id}, '${acao}')" class="px-3 py-1.5 rounded-lg text-xs font-semibold ${cor} transition whitespace-nowrap">${texto}</button>`;
+            const status = item.status_cd || 'pendente';
+            const desfazer = botao('desfazer', 'Desfazer', 'bg-slate-100 hover:bg-slate-200 text-slate-600');
+            if (status === 'pendente') return botao('coletado', 'Confirmar coleta', 'bg-emerald-600 hover:bg-emerald-700 text-white');
+            if (status === 'coletado') return `<div class="flex gap-2 justify-center">${botao('recebido', 'Recebido no CD', 'bg-[#003366] hover:bg-sky-800 text-white')}${desfazer}</div>`;
+            return desfazer;
+        }
+
+        async function confirmarCd(id, acao) {
+            if (acao === 'desfazer' && !confirm('Desfazer a última confirmação desta coleta?')) return;
+            try {
+                await api(`/api/agendamentos/${id}/cd`, { method: 'PATCH', body: JSON.stringify({ acao }) });
+                await carregarCdLatam();
+                if (!document.getElementById('conteudo-admin-painel').classList.contains('hidden')) carregarAdminSinalizacao();
+            } catch (err) {
+                alert('Erro ao confirmar: ' + err.message);
+            }
+        }
+
+        // Preencher pela planilha: busca as NFs digitadas na base geral e completa os campos vazios do formulário
+        const MSG_PLANILHA = {
+            ok: 'bg-emerald-50 text-emerald-800 border border-emerald-200',
+            parcial: 'bg-amber-50 text-amber-800 border border-amber-200',
+            nada: 'bg-slate-100 text-slate-600 border border-slate-200',
+        };
+
+        async function preencherPelaPlanilha() {
+            const nf = document.getElementById('novo_nf').value.trim();
+            const aviso = document.getElementById('novo_aviso_planilha');
+            document.getElementById('novo_ncoleta').value = '';
+            if (!nf) { aviso.classList.add('hidden'); return; }
+            const mostrar = (tipo, texto) => {
+                aviso.className = `md:col-span-3 text-xs px-3 py-2 rounded-lg ${MSG_PLANILHA[tipo]}`;
+                aviso.textContent = texto;
+            };
+            mostrar('nada', 'Procurando as NFs na base (planilha + Databricks)...');
+            try {
+                const s = await api('/api/agendamentos/sugestao?nf=' + encodeURIComponent(nf));
+                if (!s.encontradas) { mostrar('nada', 'Nenhuma dessas NFs está na base ainda: preencha os campos à mão.'); return; }
+                const preencher = (id, valor) => { const el = document.getElementById(id); if (valor && !el.value) el.value = valor; };
+                preencher('novo_cte', s.cte);
+                preencher('novo_data_coleta', s.data_coleta);
+                preencher('novo_data_cte', s.data_cte);
+                preencher('novo_entrega_cd', s.entrega_cd);
+                if (s.seller) {
+                    const sel = document.getElementById('novo_seller');
+                    const opcao = [...sel.options].find(o => o.value.toUpperCase().startsWith(s.seller.toUpperCase().split(' ')[0]));
+                    if (opcao) sel.value = opcao.value;
+                }
+                if (s.ncoleta) document.getElementById('novo_ncoleta').value = s.ncoleta;
+                const coleta = s.ncoleta ? ` · coleta ${s.ncoleta}${s.status_planilha ? ` (${s.status_planilha})` : ''}` : '';
+                const transp = s.transportadora && !/LATAM/i.test(s.transportadora) ? ` · atenção: na base a transportadora é ${s.transportadora}` : '';
+                mostrar(s.encontradas === s.total && !transp ? 'ok' : 'parcial',
+                    `Preenchido pela base: ${s.encontradas} de ${s.total} NF(s) encontradas${coleta}${transp}. Confira antes de gravar.`);
+            } catch (err) {
+                mostrar('nada', 'Não foi possível consultar a base: ' + err.message);
+            }
+        }
+
+        async function carregarColetasPlanilha() {
+            const tbody = document.getElementById('tabela-admin-planilha');
+            tbody.innerHTML = '<tr><td colspan="9" class="p-4 text-center text-slate-400">A carregar...</td></tr>';
+            try {
+                const coletas = await api('/api/agendamentos/planilha');
+                tbody.innerHTML = coletas.length === 0
+                    ? '<tr><td colspan="9" class="p-4 text-center text-slate-400">Nenhuma coleta LATAM a caminho na planilha que ainda não esteja no portal.</td></tr>'
+                    : coletas.map(c => `
+                        <tr class="hover:bg-slate-50">
+                            <td class="p-3 font-semibold text-slate-900">${txt(c.ncoleta)}</td>
+                            <td class="p-3">${txt(c.seller)}</td>
+                            <td class="p-3 font-semibold text-[#003366]">${txt(c.notas)}</td>
+                            <td class="p-3 font-mono">${txt(c.cte)}</td>
+                            <td class="p-3">${formatarData(c.data_coleta)}</td>
+                            <td class="p-3">${formatarData(c.data_cte)}</td>
+                            <td class="p-3">${formatarData(c.previsao_entrega)}</td>
+                            <td class="p-3"><span class="bg-sky-100 text-sky-800 text-xs px-2.5 py-1 rounded-full font-medium">${txt(c.status_planilha)}</span></td>
+                            <td class="p-3 text-center">
+                                <button data-coleta="${esc(c.ncoleta)}" onclick="liberarColetaPlanilha(this.dataset.coleta)" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition whitespace-nowrap">Liberar para o CD</button>
+                            </td>
+                        </tr>`).join('');
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="9" class="p-4 text-center text-red-500">${esc(err.message)}</td></tr>`;
+            }
+        }
+
+        async function liberarColetaPlanilha(ncoleta) {
+            if (!confirm(`Incluir a coleta ${ncoleta} no portal já liberada para o CD01?`)) return;
+            try {
+                await api('/api/agendamentos/planilha', { method: 'POST', body: JSON.stringify({ ncoleta }) });
+                carregarAgendamentos();
+                await carregarAdminSinalizacao();
+                atualizarAvisoCd();
+            } catch (err) {
+                alert('Erro ao liberar: ' + err.message);
+            }
         }
 
         async function carregarFiltrosEntregas() {
@@ -1181,7 +1350,8 @@
                 data_coleta: document.getElementById('novo_data_coleta').value || null,
                 data_cte: document.getElementById('novo_data_cte').value || null,
                 entrega_cd: document.getElementById('novo_entrega_cd').value || null,
-                status_etapa: document.getElementById('novo_status').value
+                status_etapa: document.getElementById('novo_status').value,
+                ncoleta: document.getElementById('novo_ncoleta').value || null,
             };
 
             try {
@@ -1195,6 +1365,8 @@
                 document.getElementById('novo_data_coleta').value = '';
                 document.getElementById('novo_data_cte').value = '';
                 document.getElementById('novo_entrega_cd').value = '';
+                document.getElementById('novo_ncoleta').value = '';
+                document.getElementById('novo_aviso_planilha').classList.add('hidden');
                 carregarAgendamentos();
                 alert('Coleta LATAM incluída! Ela aparece para o CD depois que o admin liberar no Painel Admin.');
             } catch (err) {
@@ -1229,33 +1401,41 @@
         // (a do CD traz todas as liberadas, não só as 100 mais recentes)
         async function carregarCdLatam() {
             const tbody = document.getElementById('tabela-cd-latam');
-            tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="9" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>';
             try {
                 const filtrados = await api('/api/agendamentos?escopo=cd');
                 tbody.innerHTML = filtrados.length === 0
-                    ? '<tr><td colspan="7" class="p-4 text-center text-slate-400">Nenhuma carga LATAM disponível no momento.</td></tr>'
+                    ? '<tr><td colspan="9" class="p-4 text-center text-slate-400">Nenhuma carga LATAM disponível no momento.</td></tr>'
                     : filtrados.map(item => `
-                        <tr class="hover:bg-slate-50">
+                        <tr class="${item.visto_cd_em ? 'hover:bg-slate-50' : 'bg-red-50/60 hover:bg-red-50'}">
                             <td class="p-3 font-medium text-slate-900">${txt(item.seller)}</td>
                             <td class="p-3 font-semibold text-[#003366]">${txt(item.nota_fiscal)}</td>
                             <td class="p-3 font-mono">${txt(item.cte)}</td>
                             <td class="p-3">${formatarData(item.data_coleta)}</td>
                             <td class="p-3">${formatarData(item.data_cte)}</td>
                             <td class="p-3">${formatarData(item.entrega_cd)}</td>
-                            <td class="p-3"><span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-bold">Disponível para Coleta</span></td>
+                            <td class="p-3 whitespace-nowrap">${formatarDataHora(item.liberado_em)}</td>
+                            <td class="p-3">${seloSituacaoCd(item)}</td>
+                            <td class="p-3 text-center">${acoesCd(item)}</td>
                         </tr>`).join('');
+                // O CD abriu a aba: as novas deixam de ser novas (o destaque fica até a próxima abertura)
+                if (currentUser.perfil === 'cd' && filtrados.some(i => !i.visto_cd_em)) {
+                    await api('/api/agendamentos/visto', { method: 'POST', body: '{}' });
+                    atualizarAvisoCd();
+                }
             } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-red-500">${esc(err.message)}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="9" class="p-4 text-center text-red-500">${esc(err.message)}</td></tr>`;
             }
         }
 
         async function carregarAdminSinalizacao() {
             const tbody = document.getElementById('tabela-admin-sinalizacao');
-            tbody.innerHTML = '<tr><td colspan="6" class="p-4 text-center text-slate-400">A carregar painel admin...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-slate-400">A carregar painel admin...</td></tr>';
+            carregarColetasPlanilha();
             try {
                 const latamItens = await api('/api/agendamentos?escopo=admin');
                 tbody.innerHTML = latamItens.length === 0
-                    ? '<tr><td colspan="6" class="p-4 text-center text-slate-400">Nenhum registo LATAM encontrado.</td></tr>'
+                    ? '<tr><td colspan="7" class="p-4 text-center text-slate-400">Nenhum registo LATAM encontrado.</td></tr>'
                     : latamItens.map(item => `
                         <tr class="hover:bg-slate-50">
                             <td class="p-3 font-medium text-slate-900">${txt(item.seller)}</td>
@@ -1266,7 +1446,9 @@
                                 <span class="${item.liberado_latam ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'} text-xs px-2.5 py-1 rounded-full font-medium">
                                     ${item.liberado_latam ? 'Liberado' : 'Bloqueado'}
                                 </span>
+                                ${item.origem === 'planilha' ? '<div class="text-[10px] text-slate-400 mt-1">da planilha</div>' : ''}
                             </td>
+                            <td class="p-3">${item.liberado_latam ? seloSituacaoCd(item) : '<span class="text-slate-400">—</span>'}</td>
                             <td class="p-3 text-center">
                                 <button onclick="alternarLiberacao(${item.id}, ${!item.liberado_latam})" class="px-3 py-1.5 rounded-lg text-xs font-semibold text-white ${item.liberado_latam ? 'bg-red-600 hover:bg-red-700' : 'bg-emerald-600 hover:bg-emerald-700'} transition">
                                     ${item.liberado_latam ? 'Bloquear' : 'Liberar Carga'}
@@ -1274,7 +1456,7 @@
                             </td>
                         </tr>`).join('');
             } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="6" class="p-4 text-center text-red-500">${esc(err.message)}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-red-500">${esc(err.message)}</td></tr>`;
             }
         }
 
@@ -1285,6 +1467,7 @@
                     body: JSON.stringify({ liberado_latam: novoEstado }),
                 });
                 carregarAgendamentos();
+                atualizarAvisoCd();
                 await carregarAdminSinalizacao();
             } catch (err) {
                 alert('Erro ao atualizar liberação: ' + err.message);

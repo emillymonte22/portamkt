@@ -53,6 +53,31 @@ export async function onRequest(context) {
       return await alterarLiberacaoLatam(request, env, Number(latam[1]));
     }
 
+    // Sinalizador do CD01: aviso de coleta nova, confirmação pelo CD e coletas sugeridas pela planilha
+    if (path === '/api/agendamentos/novas' && request.method === 'GET') {
+      if (!['cd', 'admin'].includes(usuario.perfil)) return erro(403, 'Apenas CD e administrador');
+      return await contarNovas(env);
+    }
+    if (path === '/api/agendamentos/visto' && request.method === 'POST') {
+      // Só o próprio CD "vê" a coleta; o admin abrindo a aba não apaga o aviso do CD
+      if (usuario.perfil !== 'cd') return Response.json({ success: true, marcadas: 0 });
+      return await marcarVistas(env);
+    }
+    const confirmacao = path.match(/^\/api\/agendamentos\/(\d+)\/cd$/);
+    if (confirmacao && request.method === 'PATCH') {
+      if (!['cd', 'admin'].includes(usuario.perfil)) return erro(403, 'Apenas CD e administrador');
+      return await confirmarNoCd(request, env, Number(confirmacao[1]), usuario.username);
+    }
+    if (path === '/api/agendamentos/sugestao' && request.method === 'GET') {
+      if (usuario.perfil !== 'admin') return erro(403, 'Apenas o administrador');
+      return await sugestaoPorNotas(env, url.searchParams.get('nf') || '');
+    }
+    if (path === '/api/agendamentos/planilha') {
+      if (usuario.perfil !== 'admin') return erro(403, 'Apenas o administrador');
+      if (request.method === 'GET') return await coletasDaPlanilha(env);
+      if (request.method === 'POST') return await liberarDaPlanilha(request, env);
+    }
+
     if (path === '/api/entregas' && request.method === 'GET') return await listarEntregas(env, url.searchParams);
     if (path === '/api/entregas/filtros' && request.method === 'GET') return await filtrosEntregas(env);
     if (path === '/api/indicadores' && request.method === 'GET') return await indicadores(env, url.searchParams);
@@ -182,12 +207,14 @@ function deBase64Url(texto) {
 
 // ---------- Agendamentos ----------
 
-// Consultas: últimos 100. CD: todas as coletas LATAM liberadas. Admin: todas as LATAM, bloqueadas primeiro.
-// A tabela é pequena (digitada no portal); o LIMIT é só uma proteção (regra 12).
+// Consultas: últimos 100. CD: todas as coletas LATAM liberadas (novas primeiro, recebidas por último).
+// Admin: todas as LATAM, bloqueadas primeiro. A tabela é pequena; o LIMIT é só uma proteção (regra 12).
+const ORDEM_CD = `CASE WHEN visto_cd_em IS NULL THEN 0 WHEN status_cd = 'recebido' THEN 3 WHEN status_cd = 'coletado' THEN 2 ELSE 1 END`;
 const SQL_AGENDAMENTOS = {
   '': 'SELECT * FROM agendamentos ORDER BY id DESC LIMIT 100',
-  cd: `SELECT * FROM agendamentos WHERE UPPER(transportadora) = 'LATAM' AND liberado_latam = 1 ORDER BY id DESC LIMIT 1000`,
-  admin: `SELECT * FROM agendamentos WHERE UPPER(transportadora) = 'LATAM' ORDER BY liberado_latam, id DESC LIMIT 1000`,
+  cd: `SELECT * FROM agendamentos WHERE UPPER(transportadora) = 'LATAM' AND liberado_latam = 1
+       ORDER BY ${ORDEM_CD}, COALESCE(liberado_em, criado_em) DESC LIMIT 1000`,
+  admin: `SELECT * FROM agendamentos WHERE UPPER(transportadora) = 'LATAM' ORDER BY liberado_latam, ${ORDEM_CD}, id DESC LIMIT 1000`,
 };
 
 async function listarAgendamentos(env, escopo) {
@@ -215,10 +242,17 @@ async function criarAgendamento(request, env) {
     datas[campo] = v;
   }
 
+  // Nº da coleta da planilha (vem do preenchimento automático): não deixa incluir a mesma coleta duas vezes
+  const ncoleta = String(b.ncoleta || '').replace(/\D/g, '').slice(0, 20) || null;
+  if (ncoleta && await env.DB.prepare('SELECT 1 FROM agendamentos WHERE ncoleta = ? LIMIT 1').bind(ncoleta).first()) {
+    return erro(409, `A coleta ${ncoleta} da planilha já foi incluída`);
+  }
+
   // A coleta nasce bloqueada: o admin libera depois pelo Painel Admin, avisando o CD
   await env.DB.prepare(
-    `INSERT INTO agendamentos (seller, transportadora, nota_fiscal, cte, data_coleta, data_cte, entrega_cd, status_etapa, liberado_latam)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`
+    `INSERT INTO agendamentos (seller, transportadora, nota_fiscal, cte, data_coleta, data_cte, entrega_cd, status_etapa,
+                               liberado_latam, origem, ncoleta)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'manual', ?)`
   ).bind(
     b.seller.trim(),
     b.transportadora.trim(),
@@ -228,6 +262,7 @@ async function criarAgendamento(request, env) {
     datas.data_cte,
     datas.entrega_cd,
     String(b.status_etapa || 'Emissão do Pedido').slice(0, 60),
+    ncoleta,
   ).run();
   return Response.json({ success: true });
 }
@@ -242,9 +277,150 @@ function normalizarNotas(texto) {
 async function alterarLiberacaoLatam(request, env, id) {
   const { liberado_latam } = await request.json().catch(() => ({}));
   if (typeof liberado_latam !== 'boolean') return erro(400, 'liberado_latam deve ser true ou false');
-  const { meta } = await env.DB.prepare('UPDATE agendamentos SET liberado_latam = ? WHERE id = ?')
-    .bind(liberado_latam ? 1 : 0, id).run();
+  // Liberar marca a hora e deixa a coleta como NOVA para o CD (visto_cd_em = NULL)
+  const { meta } = await env.DB.prepare(
+    'UPDATE agendamentos SET liberado_latam = ?, liberado_em = ?, visto_cd_em = NULL WHERE id = ?'
+  ).bind(liberado_latam ? 1 : 0, liberado_latam ? agoraIso() : null, id).run();
   if (!meta.changes) return erro(404, 'Agendamento não encontrado');
+  return Response.json({ success: true });
+}
+
+const agoraIso = () => new Date().toISOString();
+const SQL_LATAM_LIBERADAS = `UPPER(transportadora) = 'LATAM' AND liberado_latam = 1`;
+
+// ---------- Sinalizador do CD01 ----------
+
+// Aviso de coleta nova: quantas coletas liberadas o CD ainda não viu (contador no menu; tabela pequena)
+async function contarNovas(env) {
+  const r = await env.DB.prepare(
+    `SELECT COUNT(*) AS novas FROM agendamentos WHERE ${SQL_LATAM_LIBERADAS} AND visto_cd_em IS NULL`
+  ).first();
+  return Response.json({ novas: r?.novas || 0 });
+}
+
+// O CD abriu a aba: as coletas liberadas deixam de ser NOVAS (a tela já recebeu a lista com o destaque)
+async function marcarVistas(env) {
+  const { meta } = await env.DB.prepare(
+    `UPDATE agendamentos SET visto_cd_em = ? WHERE ${SQL_LATAM_LIBERADAS} AND visto_cd_em IS NULL`
+  ).bind(agoraIso()).run();
+  return Response.json({ success: true, marcadas: meta.changes || 0 });
+}
+
+// CD confirma: pendente → coletado → recebido no CD; "desfazer" volta um passo
+async function confirmarNoCd(request, env, id, usuario) {
+  const { acao } = await request.json().catch(() => ({}));
+  if (!['coletado', 'recebido', 'desfazer'].includes(acao)) return erro(400, 'acao deve ser coletado, recebido ou desfazer');
+  const atual = await env.DB.prepare(
+    `SELECT status_cd, coletado_em FROM agendamentos WHERE id = ? AND ${SQL_LATAM_LIBERADAS}`
+  ).bind(id).first();
+  if (!atual) return erro(404, 'Coleta não encontrada ou não liberada para o CD');
+
+  const status = atual.status_cd || 'pendente';
+  const agora = agoraIso();
+  let sql;
+  let valores;
+  if (acao === 'coletado') {
+    if (status !== 'pendente') return erro(409, 'Esta coleta já foi confirmada');
+    sql = `status_cd = 'coletado', coletado_em = ?, confirmado_por = ?`;
+    valores = [agora, usuario];
+  } else if (acao === 'recebido') {
+    if (status === 'recebido') return erro(409, 'Esta coleta já foi recebida no CD');
+    sql = `status_cd = 'recebido', coletado_em = COALESCE(coletado_em, ?), recebido_em = ?, confirmado_por = ?`;
+    valores = [agora, agora, usuario];
+  } else if (status === 'recebido') {
+    sql = `status_cd = 'coletado', recebido_em = NULL, confirmado_por = ?`;
+    valores = [usuario];
+  } else if (status === 'coletado') {
+    sql = `status_cd = 'pendente', coletado_em = NULL, confirmado_por = ?`;
+    valores = [usuario];
+  } else {
+    return erro(409, 'Nada para desfazer');
+  }
+  await env.DB.prepare(`UPDATE agendamentos SET ${sql} WHERE id = ?`).bind(...valores, id).run();
+  return Response.json({ success: true });
+}
+
+// Preencher pela planilha: dadas as NFs digitadas na inclusão, busca na base geral (manifest + tracking + planilha)
+// o seller, a transportadora, o CT-e, as datas e o Nº da coleta. Pelo índice de NF; se nada, pela NF de 9 posições.
+async function sugestaoPorNotas(env, texto) {
+  const notas = normalizarNotas(texto).split('/').filter(Boolean).slice(0, 90);
+  if (!notas.length) return erro(400, 'Informe ao menos uma NF');
+  if (await tabelaPedidos(env) !== 'base_geral') return Response.json({ encontradas: 0, total: notas.length });
+
+  const colunas = `nota_fiscal_explode, numero_documento_nove_posicoes, n_fornecedor, transportadora, cte, data_coleta,
+                   emissao_cte, data_entrega, pl_ncoleta, pl_transportadora, pl_cte, pl_status`;
+  const marcas = notas.map(() => '?').join(', ');
+  let { results } = await env.DB.prepare(
+    `SELECT ${colunas} FROM base_geral WHERE nota_fiscal_explode IN (${marcas}) LIMIT 500`
+  ).bind(...notas.map(nfTracking)).all();
+  if (!results?.length) {
+    ({ results } = await env.DB.prepare(
+      `SELECT ${colunas} FROM base_geral
+       WHERE numero_documento_nove_posicoes <> '' AND CAST(numero_documento_nove_posicoes AS INTEGER) IN (${marcas}) LIMIT 500`
+    ).bind(...notas.map(Number)).all());
+  }
+  const linhas = results || [];
+  const primeiro = campo => linhas.map(l => l[campo]).find(v => v !== null && v !== undefined && String(v).trim() !== '') ?? null;
+  const achadas = new Set(linhas.map(l => String(l.nota_fiscal_explode || l.numero_documento_nove_posicoes || '').replace(/^0+/, '')));
+  return Response.json({
+    total: notas.length,
+    encontradas: notas.filter(n => achadas.has(n)).length,
+    seller: primeiro('n_fornecedor'),
+    transportadora: primeiro('pl_transportadora') || primeiro('transportadora'),
+    cte: primeiro('cte') || primeiro('pl_cte'),
+    data_coleta: primeiro('data_coleta'),
+    data_cte: primeiro('emissao_cte'),
+    entrega_cd: primeiro('data_entrega'),
+    ncoleta: primeiro('pl_ncoleta'),
+    status_planilha: primeiro('pl_status'),
+  });
+}
+
+// Sinalizar direto da base: coletas LATAM da planilha ainda a caminho (TRANSITO, PROGRAMADO, AGENDADO, SEFAZ)
+// que ainda não estão no portal. Lê a base geral inteira (~18 mil linhas): cache de 5 min, zerado ao liberar.
+const STATUS_A_CAMINHO = ['TRANSITO', 'PROGRAMADO', 'AGENDADO', 'SEFAZ'];
+let cachePlanilhaLatam = null;
+
+async function buscarColetasPlanilha(env, ncoleta = null) {
+  const { results } = await env.DB.prepare(
+    `SELECT pl_ncoleta AS ncoleta, MAX(n_fornecedor) AS seller,
+            group_concat(DISTINCT CAST(COALESCE(nota_fiscal_explode, numero_documento_nove_posicoes) AS INTEGER)) AS notas,
+            MAX(pl_cte) AS cte, MAX(data_coleta) AS data_coleta, MAX(emissao_cte) AS data_cte,
+            MAX(data_entrega) AS entrega_cd, MAX(pl_previsao_entrega) AS previsao_entrega,
+            MAX(UPPER(TRIM(pl_status))) AS status_planilha, COUNT(*) AS pedidos
+     FROM base_geral
+     WHERE UPPER(pl_transportadora) LIKE '%LATAM%' AND pl_ncoleta IS NOT NULL
+       AND UPPER(TRIM(pl_status)) IN (${STATUS_A_CAMINHO.map(() => '?').join(', ')})
+       ${ncoleta ? 'AND pl_ncoleta = ?' : ''}
+       AND pl_ncoleta NOT IN (SELECT ncoleta FROM agendamentos WHERE ncoleta IS NOT NULL)
+     GROUP BY pl_ncoleta ORDER BY MAX(data_coleta) DESC LIMIT 100`
+  ).bind(...STATUS_A_CAMINHO, ...(ncoleta ? [ncoleta] : [])).all();
+  return (results || []).map(c => ({ ...c, notas: String(c.notas || '').split(',').filter(Boolean).join('/') }));
+}
+
+async function coletasDaPlanilha(env) {
+  if (await tabelaPedidos(env) !== 'base_geral') return Response.json([]);
+  if (!cachePlanilhaLatam || Date.now() - cachePlanilhaLatam.em > 5 * 60 * 1000) {
+    cachePlanilhaLatam = { em: Date.now(), dados: await buscarColetasPlanilha(env) };
+  }
+  return Response.json(cachePlanilhaLatam.dados);
+}
+
+// Liberar uma coleta sugerida: inclui no portal já liberada para o CD (os dados vêm de novo do servidor, não da tela)
+async function liberarDaPlanilha(request, env) {
+  const { ncoleta } = await request.json().catch(() => ({}));
+  const numero = String(ncoleta || '').replace(/\D/g, '');
+  if (!numero) return erro(400, 'Informe a coleta');
+  const [c] = await buscarColetasPlanilha(env, numero);
+  if (!c) return erro(404, 'Coleta não encontrada na planilha, já entregue ou já incluída');
+  if (!c.notas) return erro(409, 'A coleta não tem NF na base');
+  await env.DB.prepare(
+    `INSERT INTO agendamentos (seller, transportadora, nota_fiscal, cte, data_coleta, data_cte, entrega_cd, status_etapa,
+                               liberado_latam, liberado_em, origem, ncoleta)
+     VALUES (?, 'LATAM', ?, ?, ?, ?, ?, ?, 1, ?, 'planilha', ?)`
+  ).bind(c.seller || '—', normalizarNotas(c.notas), String(c.cte || '').slice(0, 200), c.data_coleta, c.data_cte,
+    c.entrega_cd, 'Embarcado', agoraIso(), numero).run();
+  cachePlanilhaLatam = null;
   return Response.json({ success: true });
 }
 

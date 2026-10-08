@@ -18,7 +18,16 @@ CREATE TABLE IF NOT EXISTS agendamentos (
   entrega_cd     TEXT,
   status_etapa   TEXT DEFAULT 'Emissão do Pedido',
   liberado_latam INTEGER NOT NULL DEFAULT 0, -- 1 = admin liberou para o CD
-  criado_em      DATETIME DEFAULT CURRENT_TIMESTAMP
+  criado_em      DATETIME DEFAULT CURRENT_TIMESTAMP,
+  -- sinalizador do CD01 (migração 008); datas/horas em ISO UTC
+  liberado_em    TEXT,
+  visto_cd_em    TEXT,                       -- NULL = coleta liberada que o CD ainda não viu (NOVA)
+  status_cd      TEXT DEFAULT 'pendente',    -- pendente | coletado | recebido
+  coletado_em    TEXT,
+  recebido_em    TEXT,
+  confirmado_por TEXT,
+  origem         TEXT DEFAULT 'manual',      -- manual | planilha
+  ncoleta        TEXT                        -- Nº da coleta na planilha CONTROLE_AÉREO
 );
 
 -- Tabelas espelhadas do Databricks (preenchidas pelo Job databricks/sync_d1.py).
