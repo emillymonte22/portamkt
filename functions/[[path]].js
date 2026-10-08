@@ -320,8 +320,11 @@ async function listarEntregas(env, p) {
     [...filtros, '(pedido_compra = ? OR nota_fiscal_explode = ?)'], [...valores, n, nfTracking(numero)]);
   if (indexada.itens.length || aposData) return Response.json(indexada);
 
-  // 2º: número exato na NF Bemol e na ordem (a base geral não tem índice nelas: lê a tabela, ~18 mil linhas)
-  const exata = await paginaEntregas(env, tabela, [...filtros, '(nf = ? OR ordem = ?)'], [...valores, n, n]);
+  // 2º: número exato na NF Bemol, na ordem e na NF do seller de 9 posições (sem índice: lê a tabela, ~18 mil
+  // linhas). A NF do seller vem vazia em pedidos sem tracking (ex.: LATAM), mas numero_documento_nove_posicoes a tem.
+  const exata = await paginaEntregas(env, tabela,
+    [...filtros, "(nf = ? OR ordem = ? OR (numero_documento_nove_posicoes <> '' AND CAST(numero_documento_nove_posicoes AS INTEGER) = ?))"],
+    [...valores, n, n, n]);
   if (exata.itens.length || numero.length < 4) return Response.json(exata);
 
   // 3º: nada exato → busca parcial ("contém"), limitada ao período (ano corrente se não informado)

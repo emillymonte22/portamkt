@@ -738,7 +738,7 @@
                             <td class="p-3 font-medium text-slate-900">${txt(i.pedido_compra)}</td>
                             <td class="p-3">${txt(i.n_fornecedor)}</td>
                             <td class="p-3">${formatarData(i.dt_pedido)}</td>
-                            <td class="p-3">${txt(i.nota_fiscal_explode)}</td>
+                            <td class="p-3">${txt(i.nota_fiscal_explode || i.numero_documento_nove_posicoes)}</td>
                             <td class="p-3">${formatarData(i.emissao)}</td>
                             <td class="p-3">${txt(i.transportadora)}</td>
                             <td class="p-3 font-mono">${txt(i.cte)}</td>
