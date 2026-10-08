@@ -25,7 +25,7 @@ import pandas as pd
 import requests
 from msal import ConfidentialClientApplication
 from pyspark.sql import functions as F
-from pyspark.sql.types import DoubleType, StringType, StructField, StructType
+from pyspark.sql.types import DoubleType, IntegerType, StringType, StructField, StructType
 
 CF_ACCOUNT_ID = "4746b3c1373994e7d5599eb813e754fc"
 D1_DATABASE_ID = "46af9aee-add1-421f-90c6-a87f847fca86"
@@ -254,6 +254,7 @@ def para_data(v):
 
 
 def ler_controle_aereo():
+    """Lê a aba Marketplace UMA vez e devolve (NFs da planilha para a base geral, coletas da planilha)."""
     pdf = pd.read_excel(BytesIO(baixar_planilha_sharepoint(PLANILHA_URL)), sheet_name=PLANILHA_ABA, dtype=object)
     por_chave = {chave_coluna(c): c for c in pdf.columns}
     origem_col = {}
@@ -265,11 +266,18 @@ def ler_controle_aereo():
 
     conversor = {"texto": para_texto, "numero": para_numero, "data": para_data}
     por_nf = {}
-    for _, linha in pdf.iterrows():
+    coletas = []
+    for posicao, (_, linha) in enumerate(pdf.iterrows()):
         valores = {
             destino: (conversor[tipo](linha[origem_col[destino]]) if origem_col[destino] is not None else None)
             for destino, (_, tipo) in COLUNAS_PLANILHA.items()
         }
+        # Coletas da planilha (uma por linha), para "Cargas em Trânsito" e os resumos dos Indicadores.
+        # STATUS em maiúsculas e NOTAS como " / " (igual ao notebook "aereo markt"); linhas sem Nº de coleta ficam de fora.
+        if valores["ncoleta"]:
+            notas_txt = " / ".join(re.findall(r"\d+", valores["notas"] or "")) or None
+            coletas.append({**valores, "linha": posicao, "notas": notas_txt,
+                            "status": (valores["status"] or "").strip().upper() or None})
         seller = chave_seller_txt(valores["fornecedor"])
         for nf in re.findall(r"\d+", valores.pop("notas") or ""):
             nf = nf.lstrip("0")
@@ -282,8 +290,17 @@ def ler_controle_aereo():
         StructField(c, DoubleType() if COLUNAS_PLANILHA.get(c, ([], "texto"))[1] == "numero" else StringType())
         for c in campos
     ])
-    print(f"Planilha {PLANILHA_ABA}: {len(pdf)} coletas -> {len(por_nf)} NFs")
-    return spark.createDataFrame([tuple(r[c] for c in campos) for r in por_nf.values()], schema)
+    print(f"Planilha {PLANILHA_ABA}: {len(pdf)} linhas -> {len(coletas)} coletas, {len(por_nf)} NFs")
+    nfs = spark.createDataFrame([tuple(r[c] for c in campos) for r in por_nf.values()], schema)
+
+    campos_coleta = ["linha"] + list(COLUNAS_PLANILHA)
+    schema_coleta = StructType([
+        StructField(c, IntegerType() if c == "linha"
+                    else DoubleType() if COLUNAS_PLANILHA[c][1] == "numero" else StringType())
+        for c in campos_coleta
+    ])
+    coletas_df = spark.createDataFrame([tuple(r[c] for c in campos_coleta) for r in coletas], schema_coleta)
+    return nfs, coletas_df
 
 
 # COMMAND ----------
@@ -384,6 +401,8 @@ def montar_base_geral(manifest, planilha):
 manifest = spark.table("bemolonline.bol.dados_entregas_mkt_manifest_01").distinct().cache()  # view lenta: lê 1x
 sincronizar("bemolonline.bol.dados_entregas_mkt_manifest_01", "entregas_mkt", manifest)
 sincronizar("comercial.logint.f_tracking_aereo", "tracking_aereo")
-sincronizar("base geral (manifest + tracking + planilha)", "base_geral", montar_base_geral(manifest, ler_controle_aereo()))
+nfs_planilha, coletas_planilha = ler_controle_aereo()
+sincronizar("base geral (manifest + tracking + planilha)", "base_geral", montar_base_geral(manifest, nfs_planilha))
+sincronizar(f"planilha {PLANILHA_ABA} (coletas)", "coletas_planilha", coletas_planilha)
 
 

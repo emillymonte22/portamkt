@@ -185,7 +185,31 @@
                         </div>
                     </div>
 
-                    <!-- 2. Inclusão e Gestão de Coletas (LATAM) — oculto para o perfil cd -->
+                    <!-- 2. Cargas em Trânsito (todos os perfis): coletas da planilha CONTROLE_AÉREO a caminho -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <h3 class="text-lg font-bold text-[#2c7be5] mb-4">Cargas em Trânsito</h3>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm text-slate-700 border-collapse">
+                                <thead class="bg-[#1f2d3d] text-white text-xs font-semibold">
+                                    <tr>
+                                        <th class="p-2.5 border border-slate-200 text-center">COLETA</th>
+                                        <th class="p-2.5 border border-slate-200 text-center">FORNECEDOR</th>
+                                        <th class="p-2.5 border border-slate-200 text-center">TRANSPORTADORA</th>
+                                        <th class="p-2.5 border border-slate-200 text-center">Nº CTE</th>
+                                        <th class="p-2.5 border border-slate-200 text-center">NOTAS</th>
+                                        <th class="p-2.5 border border-slate-200 text-center">PREVISÃO</th>
+                                        <th class="p-2.5 border border-slate-200 text-center">STATUS</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabela-transito">
+                                    <tr><td colspan="7" class="p-4 text-center text-slate-400 border border-slate-200">A carregar...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p id="transito-atualizado" class="text-right text-[11px] text-slate-400 mt-3"></p>
+                    </div>
+
+                    <!-- 3. Inclusão e Gestão de Coletas (LATAM) — só o admin -->
                     <div id="card-inclusao-coleta" class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <div class="flex justify-between items-center mb-4">
                             <div>
@@ -357,6 +381,44 @@
                             <div class="relative">
                                 <div id="ind-grafico" class="relative flex gap-2 overflow-x-auto pb-1"></div>
                                 <div id="ind-tooltip" class="hidden absolute z-10 pointer-events-none bg-white border border-slate-200 shadow-lg rounded-lg p-3 text-xs text-slate-700 min-w-[170px]"></div>
+                            </div>
+                        </div>
+
+                        <!-- Resumo das coletas (planilha CONTROLE_AÉREO), como no relatório "aereo markt" -->
+                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                            <div class="bg-[#f7f9fc] p-5 rounded-2xl border border-slate-200">
+                                <h3 class="text-lg font-bold text-[#2c7be5] mb-3">Resumo Mensal</h3>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-sm text-slate-700 border-collapse bg-white">
+                                        <thead class="bg-[#2c7be5] text-white text-xs font-bold">
+                                            <tr>
+                                                <th class="p-2.5 border border-slate-200 text-center">MÊS</th>
+                                                <th class="p-2.5 border border-slate-200 text-center">COLETAS</th>
+                                                <th class="p-2.5 border border-slate-200 text-center">VALOR TOTAL</th>
+                                                <th class="p-2.5 border border-slate-200 text-center">Lead Time<br>Coleta x CD</th>
+                                                <th class="p-2.5 border border-slate-200 text-center">Lead Time<br>Pedido x Entrega Cliente</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tabela-resumo-mensal"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            <div class="bg-[#f7f9fc] p-5 rounded-2xl border border-slate-200">
+                                <h3 id="titulo-resumo-origem" class="text-lg font-bold text-[#2c7be5] mb-3">Resumo por Origem</h3>
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-sm text-slate-700 border-collapse bg-white">
+                                        <thead class="bg-[#2c7be5] text-white text-xs font-bold">
+                                            <tr>
+                                                <th class="p-2.5 border border-slate-200 text-center">ORIGEM</th>
+                                                <th class="p-2.5 border border-slate-200 text-center">COLETAS</th>
+                                                <th class="p-2.5 border border-slate-200 text-center">VALOR TOTAL</th>
+                                                <th class="p-2.5 border border-slate-200 text-center">Lead Time<br>Coleta x CD</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tabela-resumo-origem"></tbody>
+                                    </table>
+                                </div>
+                                <p class="text-[11px] text-slate-400 mt-3">Coletas da planilha CONTROLE_AÉREO (aba Marketplace) pela data da coleta · Lead Time Coleta x CD = média da coluna LEAD TIME da planilha · Pedido x Entrega Cliente = média dos pedidos do mês na base geral</p>
                             </div>
                         </div>
 
@@ -607,8 +669,8 @@
             };
             // Só o admin inclui coletas (a API também confere)
             document.getElementById('btn-incluir-coleta').classList.toggle('hidden', currentUser.perfil !== 'admin');
-            // O CD vê as coletas só na aba "Disponível para Coleta (LATAM)" (a API também confere)
-            document.getElementById('card-inclusao-coleta').classList.toggle('hidden', currentUser.perfil === 'cd');
+            // Inclusão de Coletas (LATAM) só para o admin; CD e comercial veem "Cargas em Trânsito" (a API também confere)
+            document.getElementById('card-inclusao-coleta').classList.toggle('hidden', currentUser.perfil !== 'admin');
             for (const [aba, mostrar] of Object.entries(visivel)) {
                 const el = document.getElementById('menu-' + aba);
                 if (el) {
@@ -649,12 +711,38 @@
         async function carregarDados() {
             carregarFiltrosEntregas();
             carregarStatusSync();
-            if (currentUser.perfil !== 'cd') carregarAgendamentos();
+            if (currentUser.perfil === 'admin') carregarAgendamentos();
+            carregarTransito();
             // Pedidos Marketplace só carregam quando a pessoa clica em Pesquisar
             // Aviso de coleta nova (CD e admin): agora e a cada 5 min enquanto o portal estiver aberto
             if (['cd', 'admin'].includes(currentUser.perfil)) {
                 atualizarAvisoCd();
                 if (!timerAvisoCd) timerAvisoCd = setInterval(atualizarAvisoCd, 5 * 60 * 1000);
+            }
+        }
+
+        // ---------- Cargas em Trânsito (planilha CONTROLE_AÉREO) ----------
+        async function carregarTransito() {
+            const tbody = document.getElementById('tabela-transito');
+            const celula = 'p-2.5 border border-slate-200';
+            try {
+                const { coletas, atualizado_em } = await api('/api/coletas/transito');
+                tbody.innerHTML = coletas.length === 0
+                    ? `<tr><td colspan="7" class="p-4 text-center text-slate-400 border border-slate-200">Nenhuma carga em trânsito.</td></tr>`
+                    : coletas.map((c, i) => `
+                        <tr class="${i % 2 ? 'bg-[#f7f9fc]' : 'bg-white'}">
+                            <td class="${celula} text-center">${txt(c.ncoleta)}</td>
+                            <td class="${celula} text-center">${txt(c.fornecedor)}</td>
+                            <td class="${celula} text-center">${txt(c.transportadora)}</td>
+                            <td class="${celula} text-center font-bold text-[#2c7be5]">${txt(c.cte)}</td>
+                            <td class="${celula} text-xs">${c.notas ? esc(c.notas) : ''}</td>
+                            <td class="${celula} text-center whitespace-nowrap">${formatarData(c.previsao_entrega)}</td>
+                            <td class="${celula} text-center font-bold">${txt(c.status)}</td>
+                        </tr>`).join('');
+                document.getElementById('transito-atualizado').textContent = atualizado_em
+                    ? `Atualizado em ${new Date(atualizado_em).toLocaleDateString('pt-BR', { timeZone: 'America/Manaus' })}` : '';
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="7" class="p-4 text-center text-red-500 border border-slate-200">${esc(err.message)}</td></tr>`;
             }
         }
 
@@ -1091,6 +1179,7 @@
                 desenharCartoes(somarGrupos(dados.grupos));
                 desenharGraficoMeses(dados.grupos);
                 desenharTabelaSellers(dados.grupos);
+                carregarResumoColetas(params);
             } catch (err) {
                 aviso.textContent = err.message;
             }
@@ -1204,6 +1293,41 @@
 
         function esconderTooltipMes() {
             document.getElementById('ind-tooltip').classList.add('hidden');
+        }
+
+        // Resumo Mensal e Resumo por Origem das coletas (mesmos números do relatório "aereo markt")
+        const moeda = v => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const umaCasaPonto = v => v === null || v === undefined ? '-' : Number(v).toFixed(1);
+
+        async function carregarResumoColetas(params) {
+            const mensal = document.getElementById('tabela-resumo-mensal');
+            const origem = document.getElementById('tabela-resumo-origem');
+            const celula = 'p-2.5 border border-slate-200 text-center';
+            const vazio = cols => `<tr><td colspan="${cols}" class="${celula} text-slate-400">Nenhum dado disponível.</td></tr>`;
+            const zebra = i => (i % 2 ? 'bg-[#f7f9fc]' : 'bg-white');
+            mensal.innerHTML = origem.innerHTML = `<tr><td colspan="5" class="${celula} text-slate-400">A carregar...</td></tr>`;
+            try {
+                const r = await api('/api/indicadores/coletas?' + params);
+                mensal.innerHTML = r.mensal.length === 0 ? vazio(5) : r.mensal.map((m, i) => `
+                    <tr class="${zebra(i)}">
+                        <td class="${celula}">${txt(m.mes)}</td>
+                        <td class="${celula}">${numero(m.coletas)}</td>
+                        <td class="${celula}">${esc(moeda(m.valor_total))}</td>
+                        <td class="${celula}">${umaCasaPonto(m.lead_time)}</td>
+                        <td class="${celula}" title="${m.pedidos_cliente ? `média de ${numero(m.pedidos_cliente)} pedidos` : 'sem pedidos entregues'}">${umaCasaPonto(m.pedidos_cliente ? m.lead_time_cliente : null)}</td>
+                    </tr>`).join('');
+                document.getElementById('titulo-resumo-origem').textContent = r.mes_origem ? `Resumo por Origem - ${r.mes_origem}` : 'Resumo por Origem';
+                origem.innerHTML = r.origem.length === 0 ? vazio(4) : r.origem.map((o, i) => `
+                    <tr class="${zebra(i)}">
+                        <td class="${celula}">${txt(o.origem)}</td>
+                        <td class="${celula}">${numero(o.coletas)}</td>
+                        <td class="${celula}">${esc(moeda(o.valor_total))}</td>
+                        <td class="${celula}">${umaCasaPonto(o.lead_time)}</td>
+                    </tr>`).join('');
+            } catch (err) {
+                mensal.innerHTML = `<tr><td colspan="5" class="${celula} text-red-500">${esc(err.message)}</td></tr>`;
+                origem.innerHTML = '';
+            }
         }
 
         function desenharTabelaSellers(grupos) {

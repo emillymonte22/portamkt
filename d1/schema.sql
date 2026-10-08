@@ -153,6 +153,33 @@ CREATE TABLE IF NOT EXISTS tracking_datas_nf (
 );
 CREATE INDEX IF NOT EXISTS idx_tracking_datas_nf ON tracking_datas_nf (nota_fiscal_explode);
 
+-- Coletas da planilha CONTROLE_AÉREO (aba Marketplace), uma linha por linha da planilha. Montada pelo Job.
+-- Alimenta "Cargas em Trânsito" e os resumos de coletas nos Indicadores (regras do notebook "aereo markt").
+CREATE TABLE IF NOT EXISTS coletas_planilha (
+  row_hash         TEXT PRIMARY KEY,
+  linha            INTEGER,
+  ncoleta          TEXT,
+  fornecedor       TEXT,
+  origem           TEXT,
+  destino          TEXT,
+  data_coleta      TEXT,
+  transportadora   TEXT,
+  notas            TEXT,
+  cte              TEXT,
+  volumes          REAL,
+  peso             REAL,
+  data_cte         TEXT,
+  valor_nota       REAL,
+  valor_frete      REAL,
+  previsao_entrega TEXT,
+  chegada_mao      TEXT,
+  agenda_cd        TEXT,
+  meta             REAL,
+  lead_time        REAL,
+  dias_atraso      REAL,
+  status           TEXT
+);
+
 -- Uma linha por execução do Job, para o portal mostrar "atualizado em ..."
 CREATE TABLE IF NOT EXISTS sync_log (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,

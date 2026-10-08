@@ -37,8 +37,9 @@ export async function onRequest(context) {
         const escopo = url.searchParams.get('escopo') || '';
         if (escopo === 'cd' && !['cd', 'admin'].includes(usuario.perfil)) return erro(403, 'Apenas CD e administrador');
         if (escopo === 'admin' && usuario.perfil !== 'admin') return erro(403, 'Apenas o administrador');
-        // O CD só vê as coletas liberadas (escopo=cd), não a lista geral de inclusão
-        if (escopo === '' && usuario.perfil === 'cd') return erro(403, 'O CD vê as coletas na aba Disponível para Coleta');
+        // A lista geral de inclusão (card "Inclusão de Coletas") é só do admin (pedido da Emilly em 08/10);
+        // o CD vê as liberadas na aba Disponível para Coleta e todos veem "Cargas em Trânsito"
+        if (escopo === '' && usuario.perfil !== 'admin') return erro(403, 'Apenas o administrador');
         return await listarAgendamentos(env, escopo);
       }
       if (request.method === 'POST') {
@@ -78,6 +79,8 @@ export async function onRequest(context) {
       if (request.method === 'POST') return await liberarDaPlanilha(request, env);
     }
 
+    if (path === '/api/coletas/transito' && request.method === 'GET') return await cargasEmTransito(env);
+    if (path === '/api/indicadores/coletas' && request.method === 'GET') return await resumoColetas(env, url.searchParams);
     if (path === '/api/entregas' && request.method === 'GET') return await listarEntregas(env, url.searchParams);
     if (path === '/api/entregas/filtros' && request.method === 'GET') return await filtrosEntregas(env);
     if (path === '/api/indicadores' && request.method === 'GET') return await indicadores(env, url.searchParams);
@@ -378,7 +381,8 @@ async function sugestaoPorNotas(env, texto) {
 
 // Sinalizar direto da base: coletas LATAM da planilha ainda a caminho (TRANSITO, PROGRAMADO, AGENDADO, SEFAZ)
 // que ainda não estão no portal. Lê a base geral inteira (~18 mil linhas): cache de 5 min, zerado ao liberar.
-const STATUS_A_CAMINHO = ['TRANSITO', 'PROGRAMADO', 'AGENDADO', 'SEFAZ'];
+// Mesma lista do notebook "aereo markt" da Emilly (Cargas em Trânsito)
+const STATUS_A_CAMINHO = ['TRANSITO', 'PROGRAMADO', 'EM ROTA CD', 'AGENDADO', 'SEFAZ'];
 let cachePlanilhaLatam = null;
 
 async function buscarColetasPlanilha(env, ncoleta = null) {
@@ -422,6 +426,96 @@ async function liberarDaPlanilha(request, env) {
     c.entrega_cd, 'Embarcado', agoraIso(), numero).run();
   cachePlanilhaLatam = null;
   return Response.json({ success: true });
+}
+
+// ---------- Coletas da planilha (tabela coletas_planilha) ----------
+// Mesmas regras do notebook "aereo markt" da Emilly. A tabela é pequena (~460 linhas): lida inteira.
+
+// Cargas em Trânsito: coletas com status a caminho (todos os perfis veem, aba Consultas)
+async function cargasEmTransito(env) {
+  const [coletas, sync] = await env.DB.batch([
+    env.DB.prepare(
+      `SELECT ncoleta, fornecedor, transportadora, cte, notas, previsao_entrega, status
+       FROM coletas_planilha WHERE status IN (${STATUS_A_CAMINHO.map(() => '?').join(', ')})
+       ORDER BY CAST(ncoleta AS INTEGER), linha`
+    ).bind(...STATUS_A_CAMINHO),
+    env.DB.prepare(`SELECT MAX(executado_em) AS em FROM sync_log WHERE tabela = 'coletas_planilha'`),
+  ]);
+  return Response.json({ coletas: coletas.results || [], atualizado_em: sync.results?.[0]?.em || null });
+}
+
+// Resumo Mensal e Resumo por Origem das coletas (Indicadores), com o filtro geral da aba:
+//   uma linha por coleta (a primeira de cada Nº de coleta + data da coleta, como o drop_duplicates do notebook),
+//   mês = mês da DATA DA COLETA, COLETAS = Nº de coletas distintas, VALOR TOTAL = soma do VALOR DA NOTA,
+//   Lead Time Coleta x CD = média da coluna LEAD TIME da planilha; por origem = só o mês mais recente.
+// Mais a coluna pedida pela Emilly: Lead Time Pedido x Entrega Cliente (média por mês do pedido, base geral).
+const SELLER_NA_PLANILHA = { Brascol: ['BRASCOL', 'ONESHOP'], Vitrola: ['VITROLA'], Tramontina: ['TRAMONTINA'] };
+const cacheResumoColetas = new Map();
+
+async function resumoColetas(env, p) {
+  const ano = new Date().getFullYear();
+  const de = p.get('de') || `${ano}-01-01`;
+  const ate = p.get('ate') || `${ano}-12-31`;
+  if (![de, ate].every(d => /^\d{4}-\d{2}-\d{2}$/.test(d))) return erro(400, 'Datas inválidas');
+  if (de > ate) return erro(400, 'A data inicial é maior que a final');
+  const seller = p.get('seller') || '';
+  const tabela = await tabelaPedidos(env);
+
+  const chave = JSON.stringify([tabela, de, ate, seller]);
+  const guardado = cacheResumoColetas.get(chave);
+  if (guardado && Date.now() - guardado.em < CACHE_FILTROS_MS) return Response.json(guardado.dados);
+
+  const filtrosColeta = ['data_coleta BETWEEN ? AND ?'];
+  const valoresColeta = [de, ate];
+  if (seller) {
+    const nomes = SELLER_NA_PLANILHA[seller] || [seller.toUpperCase()];
+    filtrosColeta.push(`(${nomes.map(() => 'UPPER(fornecedor) LIKE ?').join(' OR ')})`);
+    valoresColeta.push(...nomes.map(n => `%${n}%`));
+  }
+  const base = `WITH base AS (
+      SELECT * FROM (
+        SELECT c.*, ROW_NUMBER() OVER (PARTITION BY ncoleta, data_coleta ORDER BY linha) AS rn
+        FROM coletas_planilha c WHERE ${filtrosColeta.join(' AND ')}
+      ) WHERE rn = 1
+    )`;
+  const filtrosPedido = ['dt_pedido BETWEEN ? AND ?', 'pedido IS NOT NULL'];
+  const valoresPedido = [de, ate];
+  if (seller) { filtrosPedido.push('n_fornecedor = ?'); valoresPedido.push(seller); }
+
+  const [mensal, origem, pedidos] = await env.DB.batch([
+    env.DB.prepare(
+      `${base} SELECT substr(data_coleta, 1, 7) AS mes, COUNT(DISTINCT ncoleta) AS coletas,
+              SUM(valor_nota) AS valor_total, AVG(lead_time) AS lead_time
+       FROM base GROUP BY mes ORDER BY mes`
+    ).bind(...valoresColeta),
+    env.DB.prepare(
+      `${base} SELECT origem, COUNT(DISTINCT ncoleta) AS coletas, SUM(valor_nota) AS valor_total, AVG(lead_time) AS lead_time,
+              (SELECT MAX(substr(data_coleta, 1, 7)) FROM base) AS mes
+       FROM base WHERE substr(data_coleta, 1, 7) = (SELECT MAX(substr(data_coleta, 1, 7)) FROM base)
+       GROUP BY origem ORDER BY origem`
+    ).bind(...valoresColeta),
+    env.DB.prepare(
+      `WITH p AS (
+         SELECT pedido, MAX(dt_pedido) AS dt_pedido, julianday(MAX(dt_entrega)) - julianday(MAX(dt_pedido)) AS dias
+         FROM ${tabela} WHERE ${filtrosPedido.join(' AND ')} GROUP BY pedido
+       )
+       SELECT substr(dt_pedido, 1, 7) AS mes, AVG(CASE WHEN dias >= 0 THEN dias END) AS lead_time_cliente,
+              COUNT(CASE WHEN dias >= 0 THEN 1 END) AS pedidos
+       FROM p GROUP BY mes`
+    ).bind(...valoresPedido),
+  ]);
+
+  const porMesPedido = new Map((pedidos.results || []).map(r => [r.mes, r]));
+  const meses = (mensal.results || []).map(m => ({
+    ...m,
+    lead_time_cliente: porMesPedido.get(m.mes)?.lead_time_cliente ?? null,
+    pedidos_cliente: porMesPedido.get(m.mes)?.pedidos ?? 0,
+  }));
+  const linhasOrigem = origem.results || [];
+  const dados = { de, ate, seller, mensal: meses, origem: linhasOrigem, mes_origem: linhasOrigem[0]?.mes || null };
+  if (cacheResumoColetas.size > 50) cacheResumoColetas.clear();
+  cacheResumoColetas.set(chave, { em: Date.now(), dados });
+  return Response.json(dados);
 }
 
 // ---------- Dados do Databricks ----------
