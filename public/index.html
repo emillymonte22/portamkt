@@ -374,7 +374,7 @@
                                             <th class="p-3 text-right">Fora do prazo</th>
                                             <th class="p-3 text-right">Sem entrega</th>
                                             <th class="p-3 text-right">% no prazo</th>
-                                            <th class="p-3 text-right">Pedido → faturamento CD</th>
+                                            <th class="p-3 text-right">Pedido → Entrega CD</th>
                                             <th class="p-3 text-right">Pedido → entrega cliente</th>
                                         </tr>
                                     </thead>
@@ -955,7 +955,7 @@
 
         // Soma os grupos (seller × mês) vindos da API
         function somarGrupos(grupos) {
-            const t = { pedidos: 0, no_prazo: 0, fora_prazo: 0, sem_entrega: 0, soma_fat: 0, n_fat: 0, soma_ent: 0, n_ent: 0, soma_cd: 0, n_cd: 0 };
+            const t = { pedidos: 0, no_prazo: 0, fora_prazo: 0, sem_entrega: 0, soma_pcd: 0, n_pcd: 0, soma_ent: 0, n_ent: 0, soma_cd: 0, n_cd: 0 };
             for (const g of grupos) for (const k of Object.keys(t)) t[k] += Number(g[k] || 0);
             t.outros = t.pedidos - t.no_prazo - t.fora_prazo - t.sem_entrega;
             return t;
@@ -1103,7 +1103,7 @@
                 ['No prazo', pct(t.no_prazo, entregues), `${numero(t.no_prazo)} dos ${numero(entregues)} entregues`],
                 ['Fora do prazo', numero(t.fora_prazo), `${pct(t.fora_prazo, entregues)} dos entregues`],
                 ['Sem entrega', numero(t.sem_entrega), `${pct(t.sem_entrega, t.pedidos)} dos pedidos`],
-                ['Pedido → faturamento CD', dias(t.soma_fat, t.n_fat), `média de ${numero(t.n_fat)} pedidos`],
+                ['Pedido → Entrega CD', dias(t.soma_pcd, t.n_pcd), `média de ${numero(t.n_pcd)} pedidos`],
                 ['Coleta → entrega CD', dias(t.soma_cd, t.n_cd), `média de ${numero(t.n_cd)} pedidos`],
                 ['Pedido → entrega cliente', dias(t.soma_ent, t.n_ent), `média de ${numero(t.n_ent)} pedidos`],
             ];
@@ -1216,7 +1216,7 @@
                     <td class="p-3 text-right">${numero(s.fora_prazo)}</td>
                     <td class="p-3 text-right">${numero(s.sem_entrega)}</td>
                     <td class="p-3 text-right font-semibold text-[#003366]">${pct(s.no_prazo, s.no_prazo + s.fora_prazo)}</td>
-                    <td class="p-3 text-right">${dias(s.soma_fat, s.n_fat)}</td>
+                    <td class="p-3 text-right">${dias(s.soma_pcd, s.n_pcd)}</td>
                     <td class="p-3 text-right">${dias(s.soma_ent, s.n_ent)}</td>
                 </tr>`).join('');
         }

@@ -586,12 +586,13 @@ async function indicadores(env, p) {
     valores.push(seller);
   }
 
-  // Prazos em dias só contam quando as duas datas existem e a diferença não é negativa
+  // Prazos em dias só contam quando as duas datas existem e a diferença não é negativa.
+  // d_pcd = pedido → Entrega CD (pedido da Emilly em 08/10; antes era pedido → faturamento CD)
   const { results } = await env.DB.prepare(
     `WITH base AS (
        SELECT pedido,
               MAX(n_fornecedor) AS seller, MAX(dt_pedido) AS dt_pedido, UPPER(TRIM(MAX(no_prazo))) AS status,
-              julianday(MAX(dt_faturamento)) - julianday(MAX(dt_pedido)) AS d_fat,
+              julianday(MAX(data_entrega))   - julianday(MAX(dt_pedido)) AS d_pcd,
               julianday(MAX(dt_entrega))     - julianday(MAX(dt_pedido)) AS d_ent,
               julianday(MAX(data_entrega))   - julianday(MAX(data_coleta)) AS d_cd
        FROM ${tabela} WHERE ${filtros.join(' AND ')}
@@ -601,7 +602,7 @@ async function indicadores(env, p) {
             SUM(status = 'NO PRAZO') AS no_prazo,
             SUM(status = 'FORA DO PRAZO') AS fora_prazo,
             SUM(status = 'SEM ENTREGA') AS sem_entrega,
-            SUM(CASE WHEN d_fat >= 0 THEN d_fat END) AS soma_fat, COUNT(CASE WHEN d_fat >= 0 THEN 1 END) AS n_fat,
+            SUM(CASE WHEN d_pcd >= 0 THEN d_pcd END) AS soma_pcd, COUNT(CASE WHEN d_pcd >= 0 THEN 1 END) AS n_pcd,
             SUM(CASE WHEN d_ent >= 0 THEN d_ent END) AS soma_ent, COUNT(CASE WHEN d_ent >= 0 THEN 1 END) AS n_ent,
             SUM(CASE WHEN d_cd  >= 0 THEN d_cd  END) AS soma_cd,  COUNT(CASE WHEN d_cd  >= 0 THEN 1 END) AS n_cd
      FROM base GROUP BY seller, mes ORDER BY mes, seller`
