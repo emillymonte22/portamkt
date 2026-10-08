@@ -318,6 +318,12 @@ def vazio_para_nulo(expr):
 
 def montar_base_geral(manifest, planilha):
     m = manifest.toDF(*[c.lower() for c in manifest.columns])
+    # A NF do seller (nota_fiscal_explode) vem vazia em ~6 mil pedidos (a view a tira do tracking; LATAM não está
+    # lá). numero_documento_nove_posicoes tem a mesma NF (igual em 100% dos 11.677 pedidos com as duas, 08/10):
+    # quando a primeira falta, usa a segunda — senão a busca por NF e a junção com a planilha não acham o pedido.
+    doc9 = F.regexp_replace(F.col("numero_documento_nove_posicoes").cast("string"), r"\D", "")
+    nf_doc9 = F.when(F.regexp_replace(doc9, r"^0+", "") != "", F.lpad(F.regexp_replace(doc9, r"^0+", ""), 10, "0"))
+    m = m.withColumn("nota_fiscal_explode", F.coalesce(F.col("nota_fiscal_explode").cast("string"), nf_doc9))
     m = m.withColumn("_nf", nf10("nota_fiscal_explode")).withColumn("_seller", chave_seller("n_fornecedor"))
 
     t = spark.table("comercial.logint.f_tracking_aereo")
