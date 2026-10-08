@@ -163,11 +163,12 @@
                                         <th class="p-3">NOTA BEMOL</th>
                                         <th class="p-3">DT_ENTREGA_CLIENTE</th>
                                         <th class="p-3">Destino</th>
+                                        <th class="p-3">ETAPA ATUAL</th>
                                         <th class="p-3">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody id="tabela-entregas" class="divide-y divide-slate-200">
-                                    <tr><td colspan="16" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>
+                                    <tr><td colspan="17" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -651,7 +652,7 @@
             document.getElementById('entregas-aviso').classList.add('hidden');
             document.getElementById('entregas-resultado').classList.remove('hidden');
             document.getElementById('tabela-entregas').innerHTML =
-                '<tr><td colspan="16" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>';
+                '<tr><td colspan="17" class="p-4 text-center text-slate-400">A carregar dados...</td></tr>';
             carregarEntregas();
         }
 
@@ -665,6 +666,29 @@
             if (delta < 0 && cursores.length > 1) cursores.pop();
             paginaEntregas = cursores.length;
             carregarEntregas();
+        }
+
+        // Etapa atual do pedido: a etapa mais avançada que já tem data na base geral (manifest + tracking +
+        // planilha, inclusive LATAM). Da última para a primeira; a primeira com data é onde o pedido está.
+        const ETAPAS_PEDIDO = [
+            ['dt_entrega',     'Entregue ao cliente', 'bg-emerald-100 text-emerald-800'],
+            ['dt_faturamento', 'Faturado (CD)',       'bg-sky-100 text-sky-800'],
+            ['data_entrega',   'Entregue no CD',      'bg-sky-100 text-sky-800'],
+            ['data_embarque',  'Embarcado',           'bg-indigo-100 text-indigo-800'],
+            ['emissao_cte',    'CT-e emitido',        'bg-violet-100 text-violet-800'],
+            ['data_coleta',    'Coletado',            'bg-violet-100 text-violet-800'],
+            ['emissao',        'NF emitida',          'bg-slate-100 text-slate-700'],
+            ['dt_pedido',      'Pedido',              'bg-slate-100 text-slate-700'],
+        ];
+
+        function etapaAtual(i) {
+            return ETAPAS_PEDIDO.find(([campo]) => /^\d{4}-\d{2}-\d{2}/.test(i[campo] || '')) || null;
+        }
+
+        function seloEtapa(i) {
+            const etapa = etapaAtual(i);
+            if (!etapa) return '—';
+            return `<span class="${etapa[2]} text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap" title="desde ${formatarData(i[etapa[0]])}">${esc(etapa[1])}</span>`;
         }
 
         function corStatus(s) {
@@ -708,7 +732,7 @@
 
                 qtd = itens.length;
                 tbody.innerHTML = itens.length === 0
-                    ? '<tr><td colspan="16" class="p-4 text-center text-slate-400">Nenhum pedido encontrado.</td></tr>'
+                    ? '<tr><td colspan="17" class="p-4 text-center text-slate-400">Nenhum pedido encontrado.</td></tr>'
                     : itens.map(i => `
                         <tr class="hover:bg-slate-50">
                             <td class="p-3 font-medium text-slate-900">${txt(i.pedido_compra)}</td>
@@ -726,10 +750,11 @@
                             <td class="p-3 font-semibold text-[#003366]">${txt(i.nf)}</td>
                             <td class="p-3">${formatarData(i.dt_entrega)}</td>
                             <td class="p-3">${txt([[i.bairro, i.cidade].filter(Boolean).join(', '), i.uf].filter(Boolean).join(' - '))}</td>
+                            <td class="p-3">${seloEtapa(i)}</td>
                             <td class="p-3"><span class="${corStatus(i.no_prazo)} text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap">${txt(i.no_prazo)}</span></td>
                         </tr>`).join('');
             } catch (err) {
-                tbody.innerHTML = `<tr><td colspan="16" class="p-4 text-center text-red-500">${esc(err.message)}</td></tr>`;
+                tbody.innerHTML = `<tr><td colspan="17" class="p-4 text-center text-red-500">${esc(err.message)}</td></tr>`;
             }
 
             const inicio = qtd ? (paginaEntregas - 1) * POR_PAGINA + 1 : 0;
@@ -1042,7 +1067,7 @@
             ['data_coleta', 'DATA_COLETA', 'data'], ['emissao_cte', 'EMISSAO_CTE', 'data'],
             ['data_embarque', 'DATA_EMBARQUE', 'data'], ['data_entrega', 'ENTREGA CD', 'data'], ['fonte_entrega_cd', 'FONTE ENTREGA CD'],
             ['dt_faturamento', 'DT_FATURAMENTO_CD', 'data'], ['nf', 'NOTA BEMOL', 'texto'],
-            ['dt_entrega', 'DT_ENTREGA_CLIENTE', 'data'], ['no_prazo', 'STATUS'],
+            ['dt_entrega', 'DT_ENTREGA_CLIENTE', 'data'], ['etapa_atual', 'ETAPA ATUAL'], ['no_prazo', 'STATUS'],
             ['bairro', 'BAIRRO'], ['cidade', 'CIDADE'], ['zona', 'ZONA'], ['uf', 'UF'],
             ['documento_compras', 'DOCUMENTO_COMPRAS', 'texto'], ['numero_documento_nove_posicoes', 'DOCUMENTO_9_POSICOES', 'texto'],
             ['origem', 'ORIGEM'],
@@ -1112,6 +1137,7 @@
                     status.textContent = `A buscar dados... ${numero(linhas.length)} linhas`;
                     params.set('apos_id', apos);
                     const parte = await api('/api/relatorio?' + params);
+                    for (const l of parte.itens) l.etapa_atual = etapaAtual(l)?.[1] || null;
                     linhas.push(...parte.itens);
                     apos = parte.proximo;
                 } while (apos);
