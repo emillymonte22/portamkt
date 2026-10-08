@@ -20,7 +20,7 @@ de cargas para o CD de Manaus.
 
 ```
 Databricks (2 tabelas)
-   │  Job "portamkt - sync Databricks -> D1" (1 vez por dia, às 12h, fuso America/Manaus)
+   │  Job "portamkt - sync Databricks -> D1" (2 vezes por dia, às 8h e às 12h, fuso America/Manaus)
    ▼
 Cloudflare D1 (banco SQLite "portamkt-db")
    ▲
@@ -102,7 +102,7 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 - `usuarios` — `id, username, senha (hash), perfil`
 - `agendamentos` (coletas LATAM) — `id, seller, transportadora, nota_fiscal (uma ou mais NFs só com números, separadas por "/", ex.: 617944/617945), cte, data_coleta, data_cte, entrega_cd, status_etapa, liberado_latam (0 = bloqueada, 1 = liberada para o CD), criado_em`. Só o admin inclui; a coleta nasce bloqueada e o admin libera no Painel Admin.
 
-**Tabelas espelhadas do Databricks** (somente leitura para o portal; o Job apaga/insere 1x por dia, às 12h de Manaus — **não editar à mão nem pelo portal**):
+**Tabelas espelhadas do Databricks** (somente leitura para o portal; o Job apaga/insere 2x por dia, às 8h e às 12h de Manaus — **não editar à mão nem pelo portal**):
 - `entregas_mkt` ← `bemolonline.bol.dados_entregas_mkt_manifest_01`. Um pedido do marketplace por linha. Colunas principais: `pedido, ordem, nf, n_fornecedor (seller), dt_pedido, dt_liberacao, dt_faturamento, dt_entrega, no_prazo (NO PRAZO | SEM ENTREGA | FORA DO PRAZO), cidade, bairro, zona, uf, nota_fiscal_explode, data_coleta, emissao_cte, data_embarque, data_entrega`.
 - `tracking_aereo` ← `comercial.logint.f_tracking_aereo`. Um item de NF por linha, com CT-e, transportadora, datas de coleta/embarque/entrega, material e valores. A coluna `etapa` vem em código do sistema (`MANIFEST_01`, `VLPOSTNG_01`, `SCHEDULE_01`…), ainda sem tradução.
 - **`base_geral`** ← **as 3 bases unificadas pelo Job** (decisão da Emilly, 07/10): manifest da BOL + tracking aéreo + planilha **CONTROLE_AÉREO_2026.xlsx** dela (SharePoint, aba **"Marketplace"**, lida com Graph API e os secrets `BemolADL/client-id-cd`, `client-secret-cd`, `tenant-id-cd`). Uma linha por linha do manifest, com as mesmas colunas de `entregas_mkt` e mais: datas unificadas (`data_coleta`, `emissao_cte`, `data_embarque`, `data_entrega` = Entrega CD) e `fonte_entrega_cd` (manifest | tracking | planilha); `transportadora` e `cte` (tracking → planilha; vários separados por ", "); `transportes` (pares "transportadora␟cte" do tracking e da planilha, para as regras do relatório); e as colunas da planilha com prefixo `pl_` (`pl_ncoleta, pl_transportadora, pl_cte, pl_origem, pl_destino, pl_volumes, pl_peso, pl_valor_nota, pl_valor_frete, pl_data_coleta, pl_data_cte, pl_previsao_entrega, pl_chegada_mao, pl_agenda_cd, pl_meta, pl_lead_time, pl_dias_atraso, pl_status`; volumes, peso e valores são **da coleta inteira**).
@@ -148,7 +148,7 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 ## 10. Job do Databricks
 
 - Nome: `portamkt - sync Databricks -> D1` (ID `1025737974527673`), notebook em `/Users/emillymonte@bemol.com.br/portamkt/sync_d1`.
-- Roda no cluster compartilhado **DATA-COMERCIAL-01**, 1 vez por dia, **às 12h** de Manaus (pedido da Emilly em 07/10; antes era 8h). Atualiza todas as tabelas de uma vez, e o portal só muda nesse horário. Tempo máximo 60 min. Falhas mandam e-mail. Para mudar horário/tempo máximo: editar `databricks/job.json` e rodar `ferramentas\atualizar_agendamento.ps1`.
+- Roda no cluster compartilhado **DATA-COMERCIAL-01**, 2 vezes por dia, **às 8h e às 12h** de Manaus (pedido da Emilly em 08/10; até então só 8h). Atualiza todas as tabelas de uma vez, e o portal só muda nesses horários (só grava o que mudou desde a execução anterior; cada execução lê ~55 mil linhas para comparar). Tempo máximo 60 min. Falhas mandam e-mail. Para mudar horário/tempo máximo: editar `databricks/job.json` e rodar `ferramentas\atualizar_agendamento.ps1`.
 - Lê as duas tabelas sem linhas repetidas, calcula um hash por linha e só envia ao D1 o que mudou (insere novas, apaga as que sumiram). Tem trava: se a origem vier com menos da metade das linhas, aborta sem apagar nada.
 - Usa o secret `portamkt/cloudflare_token` do Databricks (API Token do Cloudflare com permissão D1:Edit).
 - A Emilly **não tem permissão de computação serverless** no workspace; por isso o Job usa o cluster DATA-COMERCIAL-01 (`0811-172632-o2hyyoxq`, desliga após 10 min parado). Existe também a política de cluster "comercial" (`001D0520A2F3F477`, para Jobs) como alternativa.
@@ -167,7 +167,7 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 
 ## 11. Pendências conhecidas
 
-- **Base geral (07/10):** migração 007 aplicada, código publicado e notebook enviado sem rodar. A 1ª carga (~18 mil linhas × 4 ≈ 72 mil gravações) fica para o Job de **08/10 às 12h** (o limite de 100 mil gravações zera à meia-noite UTC = 20h de Manaus). Falta: mudar o horário do Job para 12h no Databricks (`ferramentas\atualizar_agendamento.ps1`, rodado pela Emilly); depois da carga, conferir `base_geral`, apagar `controle_aereo` e, se nada mais usar, parar de sincronizar `entregas_mkt`. Depois, remova este item.
+- **Base geral (07/10):** migração 007 aplicada, código publicado e notebook enviado sem rodar. A 1ª carga (~18 mil linhas × 4 ≈ 72 mil gravações) fica para o Job de **08/10 às 12h** (o limite de 100 mil gravações zera à meia-noite UTC = 20h de Manaus). A 1ª carga saiu no Job de 08/10 às 8h (17.666 linhas; Entrega CD em 8.129 pedidos). Falta: aplicar o horário 8h e 12h no Databricks (`ferramentas\atualizar_agendamento.ps1`, rodado pela Emilly); apagar `controle_aereo` e, se nada mais usar, parar de sincronizar `entregas_mkt`. Depois, remova este item.
 - Compartilhar o Job e a pasta do notebook com `carlossimoes@bemol.com.br` (Can Manage): a Emilly faz pela interface do Databricks (Permissions).
 - Traduzir os códigos da coluna `etapa` (`MANIFEST_01`, `VLPOSTNG_01`, …) para nomes legíveis.
 - Detalhe do tracking por NF (`/api/tracking`) já existe na API, mas ainda não tem tela.

@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS agendamentos (
 );
 
 -- Tabelas espelhadas do Databricks (preenchidas pelo Job databricks/sync_d1.py).
--- Não editar dados nestas tabelas pelo portal: o Job sobrescreve 1x por dia (12h de Manaus).
+-- Não editar dados nestas tabelas pelo portal: o Job sobrescreve 2x por dia (8h e 12h de Manaus).
 -- row_hash = sha256 da linha inteira; identifica cada linha já que a origem não tem chave única.
 
 -- Origem: comercial.logint.f_tracking_aereo (um item de NF por linha)

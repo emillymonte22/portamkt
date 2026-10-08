@@ -525,7 +525,7 @@ const SEP_TRANSPORTE = '\x1f'; // base_geral.transportes = "transportadora␟cte
 
 async function relatorio(env, p) {
   if (await tabelaPedidos(env) !== 'base_geral') {
-    return erro(503, 'O relatório volta quando a base geral terminar a primeira carga (Job do Databricks, 12h).');
+    return erro(503, 'O relatório volta quando a base geral terminar a primeira carga (Job do Databricks, 8h e 12h).');
   }
   const ano = new Date().getFullYear();
   const de = p.get('de') || `${ano}-01-01`;
