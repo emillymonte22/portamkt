@@ -435,7 +435,7 @@
                                             <th class="p-3 text-right">Fora do prazo</th>
                                             <th class="p-3 text-right">Sem entrega</th>
                                             <th class="p-3 text-right">% no prazo</th>
-                                            <th class="p-3 text-right">Pedido → Entrega CD</th>
+                                            <th class="p-3 text-right">Coleta → Entrega CD</th>
                                             <th class="p-3 text-right">Pedido → entrega cliente</th>
                                         </tr>
                                     </thead>
@@ -1342,7 +1342,7 @@
                     <td class="p-3 text-right">${numero(s.fora_prazo)}</td>
                     <td class="p-3 text-right">${numero(s.sem_entrega)}</td>
                     <td class="p-3 text-right font-semibold text-[#003366]">${pct(s.no_prazo, s.no_prazo + s.fora_prazo)}</td>
-                    <td class="p-3 text-right">${dias(s.soma_pcd, s.n_pcd)}</td>
+                    <td class="p-3 text-right">${dias(s.soma_cd, s.n_cd)}</td>
                     <td class="p-3 text-right">${dias(s.soma_ent, s.n_ent)}</td>
                 </tr>`).join('');
         }
