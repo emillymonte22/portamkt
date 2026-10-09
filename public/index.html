@@ -120,9 +120,9 @@
                                 </select>
                             </div>
                             <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Status</label>
-                                <select id="f_status" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
-                                    <option value="">Todos</option>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Transportadora</label>
+                                <select id="f_transportadora" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                                    <option value="">Todas</option>
                                 </select>
                             </div>
                             <div>
@@ -923,7 +923,7 @@
 
         async function carregarFiltrosEntregas() {
             try {
-                const { sellers, status } = await api('/api/entregas/filtros');
+                const { sellers, transportadoras } = await api('/api/entregas/filtros');
                 const opcoesSeller = '<option value="">Todos</option>' +
                     sellers.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
                 document.getElementById('f_seller').innerHTML = opcoesSeller;
@@ -933,8 +933,9 @@
                     select.innerHTML = opcoesSeller;
                     select.value = escolhido;
                 }
-                document.getElementById('f_status').innerHTML = '<option value="">Todos</option>' +
-                    status.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+                document.getElementById('f_transportadora').innerHTML = '<option value="">Todas</option>' +
+                    transportadoras.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('') +
+                    '<option value="sem">Sem transportadora</option>';
             } catch (err) { console.error(err); }
         }
 
@@ -1008,7 +1009,7 @@
                 params.set('apos_data', cursor.apos_data);
                 params.set('apos_pedido_compra', cursor.apos_pedido_compra);
             }
-            const campos = { seller: 'f_seller', status: 'f_status', de: 'f_de', ate: 'f_ate', busca: 'f_busca' };
+            const campos = { seller: 'f_seller', transportadora: 'f_transportadora', de: 'f_de', ate: 'f_ate', busca: 'f_busca' };
             for (const [param, id] of Object.entries(campos)) {
                 const v = document.getElementById(id).value.trim();
                 if (v) params.set(param, v);

@@ -615,10 +615,13 @@ async function listarEntregas(env, p) {
     valores.push(seller);
   }
 
-  const status = p.get('status');
-  if (status && status !== 'Todos') {
-    filtros.push('no_prazo = ?');
-    valores.push(status);
+  // Transportadora (pedido da Emilly, 09/10, no lugar do filtro de status): "sem" = pedidos ainda sem transportadora
+  const transportadora = p.get('transportadora');
+  if (transportadora === 'sem') {
+    filtros.push('transportadora IS NULL');
+  } else if (transportadora) {
+    filtros.push('transportadora = ?');
+    valores.push(transportadora);
   }
 
   const busca = (p.get('busca') || '').trim();
@@ -713,13 +716,16 @@ const CACHE_FILTROS_MS = 30 * 60 * 1000;
 async function filtrosEntregas(env) {
   if (!cacheFiltros || Date.now() - cacheFiltros.em > CACHE_FILTROS_MS) {
     const tabela = await tabelaPedidos(env);
-    const [sellers, status] = await env.DB.batch([
+    // entregas_mkt (antes da 1ª carga da base geral) não tem a coluna transportadora
+    const [sellers, transportadoras] = await env.DB.batch([
       env.DB.prepare(`SELECT DISTINCT n_fornecedor AS v FROM ${tabela} WHERE n_fornecedor IS NOT NULL ORDER BY 1`),
-      env.DB.prepare(`SELECT DISTINCT no_prazo AS v FROM ${tabela} WHERE no_prazo IS NOT NULL ORDER BY 1`),
+      env.DB.prepare(tabela === 'base_geral'
+        ? `SELECT DISTINCT transportadora AS v FROM base_geral WHERE transportadora IS NOT NULL ORDER BY 1`
+        : `SELECT NULL AS v WHERE 0`),
     ]);
     cacheFiltros = {
       em: Date.now(),
-      dados: { sellers: sellers.results.map(r => r.v), status: status.results.map(r => r.v) },
+      dados: { sellers: sellers.results.map(r => r.v), transportadoras: transportadoras.results.map(r => r.v) },
     };
   }
   return Response.json(cacheFiltros.dados);
