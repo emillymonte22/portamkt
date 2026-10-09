@@ -446,14 +446,22 @@ def montar_base_geral(manifest, planilha, ctes_nf):
 # Ordem: manifest e tracking primeiro (o portal ainda usa entregas_mkt até a base geral ter a 1ª carga);
 # a base geral por último. Se a planilha falhar (SharePoint fora, aba renomeada…), as tabelas do Databricks já
 # foram atualizadas e o Job termina com erro (o e-mail de falha avisa).
-manifest = spark.table("bemolonline.bol.dados_entregas_mkt_manifest_01").distinct().cache()  # view lenta: lê 1x
-sincronizar("bemolonline.bol.dados_entregas_mkt_manifest_01", "entregas_mkt", manifest)
-sincronizar("comercial.logint.f_tracking_aereo", "tracking_aereo")
-ctes_latam, ctes_latam_nf = ler_ctes_latam()
-sincronizar("btracker_ctes (LATAM)", "ctes_latam", ctes_latam)
-nfs_planilha, coletas_planilha = ler_controle_aereo()
-sincronizar("base geral (manifest + tracking + CT-e LATAM + planilha)", "base_geral",
-            montar_base_geral(manifest, nfs_planilha, ctes_latam_nf))
-sincronizar(f"planilha {PLANILHA_ABA} (coletas)", "coletas_planilha", coletas_planilha)
+# View lenta: lê 1x por execução (cache). O cluster é compartilhado e fica ligado entre os Jobs, e o cache do Spark vale
+# para o cluster todo: sem o unpersist antes, a execução seguinte reaproveitava o manifest da anterior e não via as
+# mudanças (09/10: Jobs das 12h e 14h com 0 inseridos, pedidos da Brascol sem a NF que a view já tinha).
+manifest = spark.table("bemolonline.bol.dados_entregas_mkt_manifest_01").distinct()
+manifest.unpersist(blocking=True)
+manifest = manifest.cache()
+try:
+    sincronizar("bemolonline.bol.dados_entregas_mkt_manifest_01", "entregas_mkt", manifest)
+    sincronizar("comercial.logint.f_tracking_aereo", "tracking_aereo")
+    ctes_latam, ctes_latam_nf = ler_ctes_latam()
+    sincronizar("btracker_ctes (LATAM)", "ctes_latam", ctes_latam)
+    nfs_planilha, coletas_planilha = ler_controle_aereo()
+    sincronizar("base geral (manifest + tracking + CT-e LATAM + planilha)", "base_geral",
+                montar_base_geral(manifest, nfs_planilha, ctes_latam_nf))
+    sincronizar(f"planilha {PLANILHA_ABA} (coletas)", "coletas_planilha", coletas_planilha)
+finally:
+    manifest.unpersist()
 
 

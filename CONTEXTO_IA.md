@@ -269,4 +269,11 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
     (~6 mil pedidos). A coluna Status (prazo) da tabela continua.
 27. **Job às 11h30 e 15h30 (09/10):** a pedido dela (antes 8h e 12h), aplicado no Databricks pelo Claude com
     `jobs update` (mesmo conteúdo de `ferramentas\atualizar_agendamento.ps1`) e rodado uma vez na hora (09/10, ~14h).
+28. **Cache do manifest reaproveitado entre Jobs (09/10):** a execução das 14h gravou 0 linhas novas em `entregas_mkt`, mesmo
+    com a view já trazendo a NF 409436 no pedido 4509035154 da Brascol. Causa: `manifest...cache()` no cluster compartilhado
+    DATA-COMERCIAL-01, que fica ligado entre os Jobs. O cache do Spark vale para o cluster todo, então a execução seguinte
+    reaproveitava o manifest da anterior. Correção no `sync_d1.py`: `unpersist` antes do `cache()` e no fim (`try/finally`).
+    O notebook no Databricks recebeu a correção **sem** a parte dos CT-es LATAM (que ainda não está no ar), pelo script
+    `%LOCALAPPDATA%\pmkt\enviar_notebook.ps1` rodado pela Emilly. **Atenção:** o `sync_d1.py` do repositório tem os CT-es
+    LATAM; não reenvie ao Databricks antes de aplicar a migração 010.
 16. **Migrações 002, 003 e 004 aplicadas no banco real (07/10, ~10h).** A tabela `agendamentos` estava vazia, então a 003 não perdeu dados. Até então a inclusão de coleta LATAM dava erro (faltavam `cte`, `data_cte`, `entrega_cd`).
