@@ -180,6 +180,27 @@ CREATE TABLE IF NOT EXISTS coletas_planilha (
   status           TEXT
 );
 
+-- CT-es da LATAM (CNPJ raiz 02.012.862) dos sellers do marketplace, de comercial.bemolcomercial.btracker_ctes.
+-- Uma linha por CT-e. Cada CT-e novo vira coleta LATAM bloqueada no portal; as NFs do CT-e valem sobre as da planilha.
+CREATE TABLE IF NOT EXISTS ctes_latam (
+  row_hash         TEXT PRIMARY KEY,
+  cte              TEXT,
+  chave_cte        TEXT,
+  emissao          TEXT,
+  emissao_hora     TEXT,
+  seller           TEXT,
+  fornecedor       TEXT,
+  emissor          TEXT,
+  cnpj_emissor     TEXT,
+  uf_origem        TEXT,
+  municipio_origem TEXT,
+  notas            TEXT,
+  qtd_notas        INTEGER,
+  valor_frete      REAL,
+  valor_carga      REAL,
+  situacao         INTEGER
+);
+
 -- Uma linha por execução do Job, para o portal mostrar "atualizado em ..."
 CREATE TABLE IF NOT EXISTS sync_log (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -333,7 +333,54 @@ def vazio_para_nulo(expr):
     return F.when(expr != "", expr)
 
 
-def montar_base_geral(manifest, planilha):
+# ---------- CT-es da LATAM (comercial.bemolcomercial.btracker_ctes) ----------
+# Emissor = colunas nome/cnpj (TAM LINHAS AEREAS, CNPJ raiz 02.012.862); nome_transportador_forn é o SELLER
+# (ONESHOP = Brascol). Uma linha por NF de cada CT-e na origem. Só sellers do marketplace (decisão da Emilly, 09/10).
+# Vira: ctes_latam (um por CT-e, com todas as NFs: cada CT-e novo vira coleta no portal) e, por NF + seller, entra na
+# base geral: na LATAM a data do CT-e é a data da coleta e do embarque, e as NFs do CT-e valem sobre as da planilha.
+CTE_LATAM_RAIZ = "02012862"
+CTE_DESDE = "2026-01-01"
+NOME_SELLER = {"BRASCOL": "Brascol", "VITROLA": "Vitrola", "TRAMONTINA": "Tramontina"}
+
+
+def ler_ctes_latam():
+    cnpj_raiz = F.substring(F.regexp_replace(F.col("cnpj").cast("string"), r"\D", ""), 1, 8)
+    t = (spark.table("comercial.bemolcomercial.btracker_ctes")
+         .withColumn("_seller", chave_seller("nome_transportador_forn"))
+         .withColumn("_cte", F.regexp_replace(F.col("cte").cast("string"), r"^0+", ""))
+         .withColumn("_nfnum", F.regexp_replace(F.regexp_replace(F.col("nfe").cast("string"), r"\D", ""), r"^0+", ""))
+         .where(F.col("_seller").isNotNull() & (cnpj_raiz == CTE_LATAM_RAIZ) & (F.col("emissao") >= F.lit(CTE_DESDE))
+                & (F.col("_cte") != "") & (F.col("_nfnum") != ""))
+         .withColumn("_nf", F.lpad("_nfnum", 10, "0")))
+    nome_seller = F.create_map(*[x for k, v in NOME_SELLER.items() for x in (F.lit(k), F.lit(v))])
+    por_cte = (t.groupBy("_cte", "_seller").agg(
+        F.max("chave_cte").alias("chave_cte"),
+        F.date_format(F.min("emissao"), "yyyy-MM-dd").alias("emissao"),
+        F.date_format(F.min("emissao"), "yyyy-MM-dd HH:mm:ss").alias("emissao_hora"),
+        F.max("nome_transportador_forn").alias("fornecedor"),
+        F.max("nome").alias("emissor"),
+        F.max("cnpj").alias("cnpj_emissor"),
+        F.max("uf_origem").alias("uf_origem"),
+        F.max("municipio_origem").alias("municipio_origem"),
+        F.concat_ws(" / ", F.sort_array(F.collect_set("_nfnum"))).alias("notas"),
+        F.size(F.collect_set("_nfnum")).alias("qtd_notas"),
+        F.max(F.col("valor").cast("double")).alias("valor_frete"),
+        F.max(F.col("valor_total_carga").cast("double")).alias("valor_carga"),
+        F.max("situacao").alias("situacao"),
+    ).select(
+        F.col("_cte").alias("cte"), "chave_cte", "emissao", "emissao_hora", nome_seller[F.col("_seller")].alias("seller"),
+        "fornecedor", "emissor", "cnpj_emissor", "uf_origem", "municipio_origem", "notas",
+        F.col("qtd_notas").cast("int").alias("qtd_notas"), "valor_frete", "valor_carga",
+        F.col("situacao").cast("int").alias("situacao")))
+    por_nf = t.groupBy("_nf", "_seller").agg(
+        F.date_format(F.min("emissao"), "yyyy-MM-dd").alias("bt_emissao"),
+        vazio_para_nulo(F.concat_ws(", ", F.sort_array(F.collect_set("_cte")))).alias("bt_cte"),
+        vazio_para_nulo(F.concat_ws(",", F.sort_array(F.collect_set(F.concat(F.lit("LATAM" + SEP), "_cte"))))).alias("bt_transportes"),
+    )
+    return por_cte, por_nf
+
+
+def montar_base_geral(manifest, planilha, ctes_nf):
     m = manifest.toDF(*[c.lower() for c in manifest.columns])
     # A NF do seller (nota_fiscal_explode) vem vazia em ~6 mil pedidos (a view a tira do tracking; LATAM não está
     # lá). numero_documento_nove_posicoes tem a mesma NF (igual em 100% dos 11.677 pedidos com as duas, 08/10):
@@ -363,7 +410,7 @@ def montar_base_geral(manifest, planilha):
     p = planilha.withColumnRenamed("nota_fiscal_explode", "_nf").withColumnRenamed("seller", "_seller")
     p = p.toDF(*[c if c.startswith("_") else f"pl_{c}" for c in p.columns]).drop("pl_fornecedor")
 
-    b = m.join(tk, ["_nf", "_seller"], "left").join(p, ["_nf", "_seller"], "left")
+    b = m.join(tk, ["_nf", "_seller"], "left").join(ctes_nf, ["_nf", "_seller"], "left").join(p, ["_nf", "_seller"], "left")
     latam = F.upper(F.col("pl_transportadora")).contains("LATAM")
     # A view do manifest junta o tracking só pelo número da NF: em ~200 pedidos (07/10) as datas de tracking dela
     # vêm da NF de OUTRO fornecedor com o mesmo número. Essas datas do manifest só valem quando a NF existe no
@@ -376,16 +423,17 @@ def montar_base_geral(manifest, planilha):
     m_entrega = do_manifest("data_entrega")
     par_planilha = F.when(F.col("pl_transportadora").isNotNull(),
                           F.concat_ws(SEP, "pl_transportadora", F.coalesce("pl_cte", F.lit(""))))
+    # Ordem: manifest → tracking → CT-e da LATAM (btracker: data de emissão = coleta = embarque) → planilha
     unificadas = [
-        F.coalesce(do_manifest("data_coleta"), "tk_coleta", "pl_data_coleta").alias("data_coleta"),
-        F.coalesce(do_manifest("emissao_cte"), "tk_emissao_cte", "pl_data_cte").alias("emissao_cte"),
-        F.coalesce(do_manifest("data_embarque"), "tk_embarque", F.when(latam, F.col("pl_data_cte"))).alias("data_embarque"),
+        F.coalesce(do_manifest("data_coleta"), "tk_coleta", "bt_emissao", "pl_data_coleta").alias("data_coleta"),
+        F.coalesce(do_manifest("emissao_cte"), "tk_emissao_cte", "bt_emissao", "pl_data_cte").alias("emissao_cte"),
+        F.coalesce(do_manifest("data_embarque"), "tk_embarque", "bt_emissao", F.when(latam, F.col("pl_data_cte"))).alias("data_embarque"),
         F.coalesce(m_entrega, "tk_entrega", "pl_agenda_cd").alias("data_entrega"),
         F.when(m_entrega.isNotNull(), "manifest").when(F.col("tk_entrega").isNotNull(), "tracking")
          .when(F.col("pl_agenda_cd").isNotNull(), "planilha").alias("fonte_entrega_cd"),
-        F.coalesce("tk_transportadora", "pl_transportadora").alias("transportadora"),
-        F.coalesce("tk_cte", "pl_cte").alias("cte"),
-        vazio_para_nulo(F.concat_ws(",", "tk_transportes", par_planilha)).alias("transportes"),
+        F.coalesce("tk_transportadora", F.when(F.col("bt_cte").isNotNull(), F.lit("LATAM")), "pl_transportadora").alias("transportadora"),
+        F.coalesce("tk_cte", "bt_cte", "pl_cte").alias("cte"),
+        vazio_para_nulo(F.concat_ws(",", "tk_transportes", "bt_transportes", par_planilha)).alias("transportes"),
     ]
     colunas_pl = [c for c in p.columns if c.startswith("pl_")]
     # emissao (data da NF do seller) também vem do tracking na view do manifest: mesma regra
@@ -401,8 +449,11 @@ def montar_base_geral(manifest, planilha):
 manifest = spark.table("bemolonline.bol.dados_entregas_mkt_manifest_01").distinct().cache()  # view lenta: lê 1x
 sincronizar("bemolonline.bol.dados_entregas_mkt_manifest_01", "entregas_mkt", manifest)
 sincronizar("comercial.logint.f_tracking_aereo", "tracking_aereo")
+ctes_latam, ctes_latam_nf = ler_ctes_latam()
+sincronizar("btracker_ctes (LATAM)", "ctes_latam", ctes_latam)
 nfs_planilha, coletas_planilha = ler_controle_aereo()
-sincronizar("base geral (manifest + tracking + planilha)", "base_geral", montar_base_geral(manifest, nfs_planilha))
+sincronizar("base geral (manifest + tracking + CT-e LATAM + planilha)", "base_geral",
+            montar_base_geral(manifest, nfs_planilha, ctes_latam_nf))
 sincronizar(f"planilha {PLANILHA_ABA} (coletas)", "coletas_planilha", coletas_planilha)
 
 

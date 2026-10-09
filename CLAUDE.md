@@ -17,5 +17,9 @@ Todo o contexto do projeto (arquitetura, API, banco, regras obrigatórias, ferra
   se houver dúvida; pergunte.
 - **Ao terminar uma mudança relevante**, atualize o `CONTEXTO_IA.md` (API, banco, pendências e a seção 14, Histórico) e faça
   commit junto com o código, para a próxima pessoa ou IA ter o contexto.
+- **Uma vez por dia** (pedido da Emilly, 09/10): na primeira sessão do dia, e antes de encerrar o trabalho do dia, confira se
+  há mudanças (na pasta, no GitHub, no banco ou no Job) que ainda não estão no `CONTEXTO_IA.md`. Se houver, registre na seção 14
+  (e nas seções de API, banco e pendências) e salve no GitHub junto com os arquivos alterados. Trabalho pela metade também
+  entra, marcado como "em andamento", com o que já está no ar e o que falta.
 - Nunca grave senhas, tokens ou secrets no repositório.
 - Escreva com o vocabulário do projeto: textos da tela em português, nomes de funções e variáveis em português, como no código atual.
