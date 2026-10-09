@@ -272,7 +272,10 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
 28. **Cache do manifest reaproveitado entre Jobs (09/10):** a execução das 14h gravou 0 linhas novas em `entregas_mkt`, mesmo
     com a view já trazendo a NF 409436 no pedido 4509035154 da Brascol. Causa: `manifest...cache()` no cluster compartilhado
     DATA-COMERCIAL-01, que fica ligado entre os Jobs. O cache do Spark vale para o cluster todo, então a execução seguinte
-    reaproveitava o manifest da anterior. Correção no `sync_d1.py`: `unpersist` antes do `cache()` e no fim (`try/finally`).
+    reaproveitava o manifest da anterior. A 1ª correção (`unpersist` antes do `cache()`) fez o Job falhar: o Spark tentou
+    recalcular o cache antigo e não tinha a chave do storage `strdatafactory`. Correção final: **sem `.cache()`**; o manifest
+    é lido 1x e vira uma cópia local (`spark.createDataFrame(_manifest.collect(), schema)`, ~18 mil linhas). Teste num
+    notebook temporário: 17.959 linhas e a NF da Brascol presente. Nunca use `.cache()` nesse cluster.
     O notebook no Databricks recebeu a correção **sem** a parte dos CT-es LATAM (que ainda não está no ar), pelo script
     `%LOCALAPPDATA%\pmkt\enviar_notebook.ps1` rodado pela Emilly. **Atenção:** o `sync_d1.py` do repositório tem os CT-es
     LATAM; não reenvie ao Databricks antes de aplicar a migração 010.
