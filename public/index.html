@@ -781,11 +781,28 @@
                 : `<div class="text-[10px] text-amber-700 font-semibold mt-1" title="A AGENDA CD da planilha é diferente do dia em que o CD confirmou">⚠ na planilha: ${formatarData(planilha)}</div>`;
         }
 
-        // Entrega CD na aba do CD: depois do "Recebido no CD", mostra o dia do recebimento (e a confirmação da planilha)
+        // A planilha CONTROLE_AÉREO tem prioridade (09/10): se a coleta está nela, valem as NFs, o CT-e e as datas de lá
+        const daPlanilha = (item, campoPlanilha, campoPortal) => item.planilha?.[campoPlanilha] || item[campoPortal] || null;
+
+        // NFs no formato da planilha: "nota / nota"
+        function notasColeta(item) {
+            const lista = item.planilha?.notas_lista?.length ? item.planilha.notas_lista
+                : String(item.nota_fiscal || '').split('/').map(n => n.trim()).filter(Boolean);
+            return lista.length ? esc(lista.join(' / ')) : '—';
+        }
+
+        // Entrega CD: a AGENDA CD da planilha vem primeiro; o "Recebido no CD" do CD vira conferência.
+        // Sem a planilha ainda, mostra o dia em que o CD confirmou ("aguardando planilha").
         function celulaEntregaCd(item) {
-            if ((item.status_cd || 'pendente') === 'recebido') {
-                return `<div class="font-semibold text-emerald-800">${formatarData(dataManaus(item.recebido_em))}</div>${confirmacaoPlanilha(item)}`;
+            const recebido = (item.status_cd || 'pendente') === 'recebido' ? dataManaus(item.recebido_em) : null;
+            const agenda = item.planilha_agenda_cd;
+            if (agenda) {
+                const conferencia = !recebido ? '<div class="text-[10px] text-slate-400 mt-1">pela planilha</div>'
+                    : recebido === agenda ? '<div class="text-[10px] text-emerald-700 font-semibold mt-1">✓ CD confirmou no mesmo dia</div>'
+                    : `<div class="text-[10px] text-amber-700 font-semibold mt-1" title="Dia em que o CD clicou em Recebido no CD">⚠ CD marcou recebido em ${formatarData(recebido)}</div>`;
+                return `<div class="font-semibold ${recebido ? 'text-emerald-800' : ''}">${formatarData(agenda)}</div>${conferencia}`;
             }
+            if (recebido) return `<div class="font-semibold text-emerald-800">${formatarData(recebido)}</div><div class="text-[10px] text-slate-400 mt-1">aguardando planilha</div>`;
             return formatarData(item.entrega_cd);
         }
 
@@ -854,7 +871,10 @@
                     if (opcao) sel.value = opcao.value;
                 }
                 if (s.ncoleta) document.getElementById('novo_ncoleta').value = s.ncoleta;
-                const coleta = s.ncoleta ? ` · coleta ${s.ncoleta}${s.status_planilha ? ` (${s.status_planilha})` : ''}` : '';
+                // A coleta da planilha traz TODAS as NFs: o campo passa a ter a lista completa ("nota / nota")
+                const todas = s.notas_coleta && s.notas_coleta !== nf ? ` · NFs da coleta completadas (${s.notas_coleta.split('/').length})` : '';
+                if (s.notas_coleta) document.getElementById('novo_nf').value = s.notas_coleta;
+                const coleta = s.ncoleta ? ` · coleta ${s.ncoleta}${s.status_planilha ? ` (${s.status_planilha})` : ''}${todas}` : '';
                 const transp = s.transportadora && !/LATAM/i.test(s.transportadora) ? ` · atenção: na base a transportadora é ${s.transportadora}` : '';
                 mostrar(s.encontradas === s.total && !transp ? 'ok' : 'parcial',
                     `Preenchido pela base: ${s.encontradas} de ${s.total} NF(s) encontradas${coleta}${transp}. Confira antes de gravar.`);
@@ -1538,11 +1558,11 @@
                     <tr class="hover:bg-slate-50">
                         <td class="p-3 font-medium text-slate-900">${txt(item.seller)}</td>
                         <td class="p-3">${txt(item.transportadora)}</td>
-                        <td class="p-3 font-semibold text-[#003366]">${txt(item.nota_fiscal)}</td>
-                        <td class="p-3 font-mono">${txt(item.cte)}</td>
-                        <td class="p-3">${formatarData(item.data_coleta)}</td>
-                        <td class="p-3">${formatarData(item.data_cte)}</td>
-                        <td class="p-3">${formatarData(item.entrega_cd)}</td>
+                        <td class="p-3 font-semibold text-[#003366]">${notasColeta(item)}</td>
+                        <td class="p-3 font-mono">${txt(daPlanilha(item, 'cte', 'cte'))}</td>
+                        <td class="p-3">${formatarData(daPlanilha(item, 'data_coleta', 'data_coleta'))}</td>
+                        <td class="p-3">${formatarData(daPlanilha(item, 'data_cte', 'data_cte'))}</td>
+                        <td class="p-3">${celulaEntregaCd(item)}</td>
                         <td class="p-3"><span class="bg-sky-100 text-sky-800 text-xs px-2.5 py-1 rounded-full font-medium">${txt(item.status_etapa)}</span></td>
                     </tr>`).join('');
         }
@@ -1559,10 +1579,10 @@
                     : filtrados.map(item => `
                         <tr class="${item.visto_cd_em ? 'hover:bg-slate-50' : 'bg-red-50/60 hover:bg-red-50'}">
                             <td class="p-3 font-medium text-slate-900">${txt(item.seller)}</td>
-                            <td class="p-3 font-semibold text-[#003366]">${txt(item.nota_fiscal)}</td>
-                            <td class="p-3 font-mono">${txt(item.cte)}</td>
-                            <td class="p-3">${formatarData(item.data_coleta)}</td>
-                            <td class="p-3">${formatarData(item.data_cte)}</td>
+                            <td class="p-3 font-semibold text-[#003366]">${notasColeta(item)}</td>
+                            <td class="p-3 font-mono">${txt(daPlanilha(item, 'cte', 'cte'))}</td>
+                            <td class="p-3">${formatarData(daPlanilha(item, 'data_coleta', 'data_coleta'))}</td>
+                            <td class="p-3">${formatarData(daPlanilha(item, 'data_cte', 'data_cte'))}</td>
                             <td class="p-3">${celulaEntregaCd(item)}</td>
                             <td class="p-3 whitespace-nowrap">${formatarDataHora(item.liberado_em)}</td>
                             <td class="p-3">${seloSituacaoCd(item)}</td>
@@ -1590,8 +1610,8 @@
                         <tr class="hover:bg-slate-50">
                             <td class="p-3 font-medium text-slate-900">${txt(item.seller)}</td>
                             <td class="p-3">${txt(item.transportadora)}</td>
-                            <td class="p-3 font-semibold text-[#003366]">${txt(item.nota_fiscal)}</td>
-                            <td class="p-3 font-mono">${txt(item.cte)}</td>
+                            <td class="p-3 font-semibold text-[#003366]">${notasColeta(item)}</td>
+                            <td class="p-3 font-mono">${txt(daPlanilha(item, 'cte', 'cte'))}</td>
                             <td class="p-3">
                                 <span class="${item.liberado_latam ? 'bg-emerald-100 text-emerald-800' : 'bg-amber-100 text-amber-800'} text-xs px-2.5 py-1 rounded-full font-medium">
                                     ${item.liberado_latam ? 'Liberado' : 'Bloqueado'}

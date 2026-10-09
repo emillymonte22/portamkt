@@ -225,44 +225,52 @@ async function listarAgendamentos(env, escopo) {
   if (!sql) return erro(400, 'escopo inválido');
   const { results } = await env.DB.prepare(sql).all();
   const coletas = results || [];
-  if (escopo) await anexarAgendaPlanilha(env, coletas);
+  await anexarAgendaPlanilha(env, coletas);
   return Response.json(coletas);
 }
 
-// Confirmação pela planilha (pedido da Emilly, 09/10): quando o CD marca "Recebido no CD", a tela mostra a data do
-// recebimento em Entrega CD; no dia seguinte, a planilha CONTROLE_AÉREO traz a AGENDA CD e confirma. Aqui cada coleta
-// ganha planilha_agenda_cd: pelo Nº da coleta (coletas_planilha) ou, sem ele, pelas NFs (base geral, índice de NF).
+// A planilha CONTROLE_AÉREO tem prioridade (pedido da Emilly, 09/10): cada coleta do portal ganha `planilha` com os
+// dados da coleta na planilha — todas as NFs, CT-e, datas, AGENDA CD (= Entrega CD) e status —, achada pelo Nº da
+// coleta ou, sem ele, por qualquer uma das NFs. O "Recebido no CD" do CD vira conferência contra a AGENDA CD.
 async function anexarAgendaPlanilha(env, coletas) {
   if (!coletas.length) return;
-  const porColeta = new Map();
-  const comNumero = [...new Set(coletas.map(c => c.ncoleta).filter(Boolean))];
-  const nfs = [...new Set(coletas.filter(c => !c.ncoleta)
-    .flatMap(c => String(c.nota_fiscal || '').split('/').filter(Boolean).map(nfTracking)))];
-  const consultas = [];
-  for (let i = 0; i < comNumero.length; i += 90) {
-    const lote = comNumero.slice(i, i + 90);
-    consultas.push(env.DB.prepare(
-      `SELECT ncoleta AS chave, MAX(agenda_cd) AS agenda_cd FROM coletas_planilha
-       WHERE ncoleta IN (${lote.map(() => '?').join(', ')}) GROUP BY ncoleta`).bind(...lote));
-  }
-  if (nfs.length && await tabelaPedidos(env) === 'base_geral') {
-    for (let i = 0; i < nfs.length; i += 90) {
-      const lote = nfs.slice(i, i + 90);
-      consultas.push(env.DB.prepare(
-        `SELECT nota_fiscal_explode AS chave, MAX(pl_agenda_cd) AS agenda_cd FROM base_geral
-         WHERE nota_fiscal_explode IN (${lote.map(() => '?').join(', ')}) GROUP BY nota_fiscal_explode`).bind(...lote));
-    }
-  }
-  if (!consultas.length) return;
-  for (const { results } of await env.DB.batch(consultas)) {
-    for (const r of results || []) if (r.agenda_cd) porColeta.set(String(r.chave), r.agenda_cd);
-  }
+  const { porNumero, porNf } = await mapaColetasPlanilha(env);
   for (const c of coletas) {
-    const datas = c.ncoleta
-      ? [porColeta.get(String(c.ncoleta))]
-      : String(c.nota_fiscal || '').split('/').filter(Boolean).map(n => porColeta.get(nfTracking(n)));
-    c.planilha_agenda_cd = datas.filter(Boolean).sort().pop() || null;
+    const notas = String(c.nota_fiscal || '').split('/').map(n => n.trim()).filter(Boolean);
+    c.planilha = (c.ncoleta && porNumero.get(String(c.ncoleta))) || notas.map(n => porNf.get(n)).find(Boolean) || null;
+    c.planilha_agenda_cd = c.planilha?.agenda_cd || null;
   }
+}
+
+// Coletas da planilha indexadas por Nº da coleta (1ª linha, como o notebook) e por NF (a coleta mais recente com ela).
+// ~460 linhas lidas; cache de 5 min (a planilha só muda nos Jobs das 8h e 12h).
+let cacheMapaPlanilha = null;
+
+async function mapaColetasPlanilha(env) {
+  if (!cacheMapaPlanilha || Date.now() - cacheMapaPlanilha.em > 5 * 60 * 1000) {
+    const { results } = await env.DB.prepare(
+      `SELECT linha, ncoleta, fornecedor, transportadora, notas, cte, data_coleta, data_cte, agenda_cd,
+              previsao_entrega, status FROM coletas_planilha ORDER BY linha`
+    ).all();
+    const porNumero = new Map();
+    const porNf = new Map();
+    for (const r of results || []) {
+      const coleta = { ...r, seller: nomeSeller(r.fornecedor), notas_lista: notasDaPlanilha(r.notas) };
+      if (!porNumero.has(String(r.ncoleta))) porNumero.set(String(r.ncoleta), coleta);
+      for (const nf of coleta.notas_lista) porNf.set(nf, coleta);
+    }
+    cacheMapaPlanilha = { em: Date.now(), porNumero, porNf };
+  }
+  return cacheMapaPlanilha;
+}
+
+// "617980 / 617986" → ['617980', '617986'] (sem zeros à esquerda, como o portal guarda)
+const notasDaPlanilha = texto => normalizarNotas(String(texto || '').replace(/[^\d]+/g, '/')).split('/').filter(Boolean);
+
+// FORNECEDOR da planilha → nome do seller no portal (BRASCOL/ONESHOP → Brascol…)
+function nomeSeller(fornecedor) {
+  const nome = String(fornecedor || '').toUpperCase();
+  return Object.keys(SELLER_NA_PLANILHA).find(s => SELLER_NA_PLANILHA[s].some(n => nome.includes(n))) || fornecedor || null;
 }
 
 async function criarAgendamento(request, env) {
@@ -386,6 +394,27 @@ async function confirmarNoCd(request, env, id, usuario) {
 async function sugestaoPorNotas(env, texto) {
   const notas = normalizarNotas(texto).split('/').filter(Boolean).slice(0, 90);
   if (!notas.length) return erro(400, 'Informe ao menos uma NF');
+
+  // 1º: a coleta da planilha que tem alguma dessas NFs (prioridade da planilha; traz TODAS as NFs da coleta)
+  const { porNf } = await mapaColetasPlanilha(env);
+  const coleta = notas.map(n => porNf.get(n)).find(Boolean);
+  if (coleta) {
+    return Response.json({
+      total: notas.length,
+      encontradas: notas.filter(n => coleta.notas_lista.includes(n)).length,
+      seller: coleta.seller,
+      transportadora: coleta.transportadora,
+      cte: coleta.cte,
+      data_coleta: coleta.data_coleta,
+      data_cte: coleta.data_cte,
+      entrega_cd: coleta.agenda_cd,
+      ncoleta: coleta.ncoleta,
+      status_planilha: coleta.status,
+      notas_coleta: coleta.notas_lista.join(' / '),
+    });
+  }
+
+  // 2º: sem coleta na planilha, procura na base geral (manifest + tracking)
   if (await tabelaPedidos(env) !== 'base_geral') return Response.json({ encontradas: 0, total: notas.length });
 
   const colunas = `nota_fiscal_explode, numero_documento_nove_posicoes, n_fornecedor, transportadora, cte, data_coleta,
@@ -417,31 +446,35 @@ async function sugestaoPorNotas(env, texto) {
   });
 }
 
-// Sinalizar direto da base: coletas LATAM da planilha ainda a caminho (TRANSITO, PROGRAMADO, AGENDADO, SEFAZ)
-// que ainda não estão no portal. Lê a base geral inteira (~18 mil linhas): cache de 5 min, zerado ao liberar.
+// Sinalizar direto da base: coletas LATAM da planilha ainda a caminho que ainda não estão no portal.
+// Direto da tabela de coletas da planilha (~460 linhas): vem a coleta inteira, com TODAS as NFs (09/10; antes vinha
+// da base geral, que só tem as NFs já ligadas a pedidos). Cache de 5 min, zerado ao liberar.
 // Mesma lista do notebook "aereo markt" da Emilly (Cargas em Trânsito)
 const STATUS_A_CAMINHO = ['TRANSITO', 'PROGRAMADO', 'EM ROTA CD', 'AGENDADO', 'SEFAZ'];
 let cachePlanilhaLatam = null;
 
 async function buscarColetasPlanilha(env, ncoleta = null) {
   const { results } = await env.DB.prepare(
-    `SELECT pl_ncoleta AS ncoleta, MAX(n_fornecedor) AS seller,
-            group_concat(DISTINCT CAST(COALESCE(nota_fiscal_explode, numero_documento_nove_posicoes) AS INTEGER)) AS notas,
-            MAX(pl_cte) AS cte, MAX(data_coleta) AS data_coleta, MAX(emissao_cte) AS data_cte,
-            MAX(data_entrega) AS entrega_cd, MAX(pl_previsao_entrega) AS previsao_entrega,
-            MAX(UPPER(TRIM(pl_status))) AS status_planilha, COUNT(*) AS pedidos
-     FROM base_geral
-     WHERE UPPER(pl_transportadora) LIKE '%LATAM%' AND pl_ncoleta IS NOT NULL
-       AND UPPER(TRIM(pl_status)) IN (${STATUS_A_CAMINHO.map(() => '?').join(', ')})
-       ${ncoleta ? 'AND pl_ncoleta = ?' : ''}
-       AND pl_ncoleta NOT IN (SELECT ncoleta FROM agendamentos WHERE ncoleta IS NOT NULL)
-     GROUP BY pl_ncoleta ORDER BY MAX(data_coleta) DESC LIMIT 100`
+    `SELECT linha, ncoleta, fornecedor, notas, cte, data_coleta, data_cte, agenda_cd, previsao_entrega, status
+     FROM coletas_planilha
+     WHERE UPPER(transportadora) LIKE '%LATAM%' AND ncoleta IS NOT NULL
+       AND status IN (${STATUS_A_CAMINHO.map(() => '?').join(', ')})
+       ${ncoleta ? 'AND ncoleta = ?' : ''}
+       AND ncoleta NOT IN (SELECT ncoleta FROM agendamentos WHERE ncoleta IS NOT NULL)
+     ORDER BY linha`
   ).bind(...STATUS_A_CAMINHO, ...(ncoleta ? [ncoleta] : [])).all();
-  return (results || []).map(c => ({ ...c, notas: String(c.notas || '').split(',').filter(Boolean).join('/') }));
+  const vistas = new Set();
+  return (results || [])
+    .filter(c => !vistas.has(c.ncoleta) && vistas.add(c.ncoleta))
+    .map(c => ({
+      ncoleta: c.ncoleta, seller: nomeSeller(c.fornecedor), notas: notasDaPlanilha(c.notas).join('/'),
+      cte: c.cte, data_coleta: c.data_coleta, data_cte: c.data_cte, entrega_cd: c.agenda_cd,
+      previsao_entrega: c.previsao_entrega, status_planilha: c.status,
+    }))
+    .sort((a, b) => String(b.data_coleta || '').localeCompare(String(a.data_coleta || '')));
 }
 
 async function coletasDaPlanilha(env) {
-  if (await tabelaPedidos(env) !== 'base_geral') return Response.json([]);
   if (!cachePlanilhaLatam || Date.now() - cachePlanilhaLatam.em > 5 * 60 * 1000) {
     cachePlanilhaLatam = { em: Date.now(), dados: await buscarColetasPlanilha(env) };
   }
@@ -455,7 +488,7 @@ async function liberarDaPlanilha(request, env) {
   if (!numero) return erro(400, 'Informe a coleta');
   const [c] = await buscarColetasPlanilha(env, numero);
   if (!c) return erro(404, 'Coleta não encontrada na planilha, já entregue ou já incluída');
-  if (!c.notas) return erro(409, 'A coleta não tem NF na base');
+  // Coleta LATAM pode estar na planilha ainda sem NFs: entra assim mesmo; as NFs aparecem pela planilha (prioridade)
   await env.DB.prepare(
     `INSERT INTO agendamentos (seller, transportadora, nota_fiscal, cte, data_coleta, data_cte, entrega_cd, status_etapa,
                                liberado_latam, liberado_em, origem, ncoleta)
