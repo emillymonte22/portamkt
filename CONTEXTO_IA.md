@@ -20,7 +20,7 @@ de cargas para o CD de Manaus.
 
 ```
 Databricks (2 tabelas)
-   │  Job "portamkt - sync Databricks -> D1" (2 vezes por dia, às 11h30 e às 15h30, fuso America/Manaus)
+   │  Job "portamkt - sync Databricks -> D1" (1 vez por dia, às 11h30, fuso America/Manaus)
    ▼
 Cloudflare D1 (banco SQLite "portamkt-db")
    ▲
@@ -110,7 +110,7 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 - `usuarios` — `id, username, senha (hash), perfil`
 - `agendamentos` (coletas LATAM) — `id, seller, transportadora, nota_fiscal (uma ou mais NFs só com números, separadas por "/", ex.: 617944/617945), cte, data_coleta, data_cte, entrega_cd, status_etapa, liberado_latam (0 = bloqueada, 1 = liberada para o CD), criado_em`. Só o admin inclui; a coleta nasce bloqueada e o admin libera no Painel Admin.
 
-**Tabelas espelhadas do Databricks** (somente leitura para o portal; o Job apaga/insere 2x por dia, às 11h30 e às 15h30 de Manaus — **não editar à mão nem pelo portal**):
+**Tabelas espelhadas do Databricks** (somente leitura para o portal; o Job apaga/insere 1x por dia, às 11h30 de Manaus — **não editar à mão nem pelo portal**):
 - `entregas_mkt` ← `bemolonline.bol.dados_entregas_mkt_manifest_01`. Um pedido do marketplace por linha. Colunas principais: `pedido, ordem, nf, n_fornecedor (seller), dt_pedido, dt_liberacao, dt_faturamento, dt_entrega, no_prazo (NO PRAZO | SEM ENTREGA | FORA DO PRAZO), cidade, bairro, zona, uf, nota_fiscal_explode, data_coleta, emissao_cte, data_embarque, data_entrega`.
 - `tracking_aereo` ← `comercial.logint.f_tracking_aereo`. Um item de NF por linha, com CT-e, transportadora, datas de coleta/embarque/entrega, material e valores. A coluna `etapa` vem em código do sistema (`MANIFEST_01`, `VLPOSTNG_01`, `SCHEDULE_01`…), ainda sem tradução.
 - **`base_geral`** ← **as 3 bases unificadas pelo Job** (decisão da Emilly, 07/10): manifest da BOL + tracking aéreo + planilha **CONTROLE_AÉREO_2026.xlsx** dela (SharePoint, aba **"Marketplace"**, lida com Graph API e os secrets `BemolADL/client-id-cd`, `client-secret-cd`, `tenant-id-cd`). Uma linha por linha do manifest, com as mesmas colunas de `entregas_mkt` e mais: datas unificadas (`data_coleta`, `emissao_cte`, `data_embarque`, `data_entrega` = Entrega CD) e `fonte_entrega_cd` (manifest | tracking | planilha); `transportadora` e `cte` (tracking → planilha; vários separados por ", "); `transportes` (pares "transportadora␟cte" do tracking e da planilha, para as regras do relatório); e as colunas da planilha com prefixo `pl_` (`pl_ncoleta, pl_transportadora, pl_cte, pl_origem, pl_destino, pl_volumes, pl_peso, pl_valor_nota, pl_valor_frete, pl_data_coleta, pl_data_cte, pl_previsao_entrega, pl_chegada_mao, pl_agenda_cd, pl_meta, pl_lead_time, pl_dias_atraso, pl_status`; volumes, peso e valores são **da coleta inteira**).
@@ -158,7 +158,7 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 ## 10. Job do Databricks
 
 - Nome: `portamkt - sync Databricks -> D1` (ID `1025737974527673`), notebook em `/Users/emillymonte@bemol.com.br/portamkt/sync_d1`.
-- Roda no cluster compartilhado **DATA-COMERCIAL-01**, 2 vezes por dia, **às 11h30 e às 15h30** de Manaus (pedido da Emilly em 09/10; de 08/10 a 09/10 foi 8h e 12h, antes só 8h). Um agendamento só não aceita minutos diferentes (11h30 e 15h00); ela escolheu 15h30 em vez de criar um 2º Job. Atualiza todas as tabelas de uma vez, e o portal só muda nesses horários (só grava o que mudou desde a execução anterior; cada execução lê ~55 mil linhas para comparar). Tempo máximo 30 min (a execução com a base geral leva ~4 min). Falhas mandam e-mail. Para mudar horário/tempo máximo: editar `databricks/job.json` e rodar `ferramentas\atualizar_agendamento.ps1`.
+- Roda no cluster compartilhado **DATA-COMERCIAL-01**, **1 vez por dia, às 11h30** de Manaus (pedido da Emilly em 09/10; de 08/10 a 09/10 foi 8h e 12h, antes só 8h). Atualiza todas as tabelas de uma vez, e o portal só muda nesse horário (só grava o que mudou desde a execução anterior; cada execução lê ~55 mil linhas para comparar). Tempo máximo 30 min (a execução com a base geral leva ~4 min). Falhas mandam e-mail. Para mudar horário/tempo máximo: editar `databricks/job.json` e rodar `ferramentas\atualizar_agendamento.ps1`.
 - Lê as duas tabelas sem linhas repetidas, calcula um hash por linha e só envia ao D1 o que mudou (insere novas, apaga as que sumiram). Tem trava: se a origem vier com menos da metade das linhas, aborta sem apagar nada.
 - Usa o secret `portamkt/cloudflare_token` do Databricks (API Token do Cloudflare com permissão D1:Edit).
 - A Emilly **não tem permissão de computação serverless** no workspace; por isso o Job usa o cluster DATA-COMERCIAL-01 (`0811-172632-o2hyyoxq`, desliga após 10 min parado). Existe também a política de cluster "comercial" (`001D0520A2F3F477`, para Jobs) como alternativa.
@@ -267,8 +267,9 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
 26. **Filtro de transportadora em Pedidos Marketplace (09/10):** a pedido dela, o filtro "Status" virou "Transportadora", com
     as transportadoras da base geral (em 09/10: LLS, GRU - KM CARGO, LATAM, ESSENCIAL CARGO, KM CARGO) e "Sem transportadora"
     (~6 mil pedidos). A coluna Status (prazo) da tabela continua.
-27. **Job às 11h30 e 15h30 (09/10):** a pedido dela (antes 8h e 12h), aplicado no Databricks pelo Claude com
-    `jobs update` (mesmo conteúdo de `ferramentas\atualizar_agendamento.ps1`) e rodado uma vez na hora (09/10, ~14h).
+27. **Job 1x por dia às 11h30 (09/10):** antes era 8h e 12h. Ela pediu 11h30 e 15h00. Um agendamento só não aceita minutos
+    diferentes, então ficou primeiro 11h30 e 15h30; no mesmo dia ela decidiu rodar só às 11h30. Aplicado no Databricks pelo
+    Claude com `jobs update` (mesmo conteúdo de `ferramentas\atualizar_agendamento.ps1`).
 28. **Cache do manifest reaproveitado entre Jobs (09/10):** a execução das 14h gravou 0 linhas novas em `entregas_mkt`, mesmo
     com a view já trazendo a NF 409436 no pedido 4509035154 da Brascol. Causa: `manifest...cache()` no cluster compartilhado
     DATA-COMERCIAL-01, que fica ligado entre os Jobs. O cache do Spark vale para o cluster todo, então a execução seguinte

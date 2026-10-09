@@ -1,10 +1,10 @@
 {
   "name": "portamkt - sync Databricks -> D1",
-  "description": "Atualiza o portal portamkt (D1 da Cloudflare) 2x por dia, as 11h30 e as 15h30 de Manaus: copia f_tracking_aereo e dados_entregas_mkt_manifest_01 e monta a base geral (manifest + tracking + planilha CONTROLE_AEREO). Codigo: databricks/sync_d1.py",
+  "description": "Atualiza o portal portamkt (D1 da Cloudflare) 1x por dia, as 11h30 de Manaus: copia f_tracking_aereo e dados_entregas_mkt_manifest_01 e monta a base geral (manifest + tracking + planilha CONTROLE_AEREO). Codigo: databricks/sync_d1.py",
   "max_concurrent_runs": 1,
   "timeout_seconds": 1800,
   "schedule": {
-    "quartz_cron_expression": "0 30 11,15 * * ?",
+    "quartz_cron_expression": "0 30 11 * * ?",
     "timezone_id": "America/Manaus",
     "pause_status": "UNPAUSED"
   },
