@@ -224,7 +224,45 @@ async function listarAgendamentos(env, escopo) {
   const sql = SQL_AGENDAMENTOS[escopo];
   if (!sql) return erro(400, 'escopo inválido');
   const { results } = await env.DB.prepare(sql).all();
-  return Response.json(results);
+  const coletas = results || [];
+  if (escopo) await anexarAgendaPlanilha(env, coletas);
+  return Response.json(coletas);
+}
+
+// Confirmação pela planilha (pedido da Emilly, 09/10): quando o CD marca "Recebido no CD", a tela mostra a data do
+// recebimento em Entrega CD; no dia seguinte, a planilha CONTROLE_AÉREO traz a AGENDA CD e confirma. Aqui cada coleta
+// ganha planilha_agenda_cd: pelo Nº da coleta (coletas_planilha) ou, sem ele, pelas NFs (base geral, índice de NF).
+async function anexarAgendaPlanilha(env, coletas) {
+  if (!coletas.length) return;
+  const porColeta = new Map();
+  const comNumero = [...new Set(coletas.map(c => c.ncoleta).filter(Boolean))];
+  const nfs = [...new Set(coletas.filter(c => !c.ncoleta)
+    .flatMap(c => String(c.nota_fiscal || '').split('/').filter(Boolean).map(nfTracking)))];
+  const consultas = [];
+  for (let i = 0; i < comNumero.length; i += 90) {
+    const lote = comNumero.slice(i, i + 90);
+    consultas.push(env.DB.prepare(
+      `SELECT ncoleta AS chave, MAX(agenda_cd) AS agenda_cd FROM coletas_planilha
+       WHERE ncoleta IN (${lote.map(() => '?').join(', ')}) GROUP BY ncoleta`).bind(...lote));
+  }
+  if (nfs.length && await tabelaPedidos(env) === 'base_geral') {
+    for (let i = 0; i < nfs.length; i += 90) {
+      const lote = nfs.slice(i, i + 90);
+      consultas.push(env.DB.prepare(
+        `SELECT nota_fiscal_explode AS chave, MAX(pl_agenda_cd) AS agenda_cd FROM base_geral
+         WHERE nota_fiscal_explode IN (${lote.map(() => '?').join(', ')}) GROUP BY nota_fiscal_explode`).bind(...lote));
+    }
+  }
+  if (!consultas.length) return;
+  for (const { results } of await env.DB.batch(consultas)) {
+    for (const r of results || []) if (r.agenda_cd) porColeta.set(String(r.chave), r.agenda_cd);
+  }
+  for (const c of coletas) {
+    const datas = c.ncoleta
+      ? [porColeta.get(String(c.ncoleta))]
+      : String(c.nota_fiscal || '').split('/').filter(Boolean).map(n => porColeta.get(nfTracking(n)));
+    c.planilha_agenda_cd = datas.filter(Boolean).sort().pop() || null;
+  }
 }
 
 async function criarAgendamento(request, env) {

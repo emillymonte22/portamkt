@@ -764,6 +764,31 @@
             return isNaN(d) ? '—' : d.toLocaleString('pt-BR', { timeZone: 'America/Manaus', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
         }
 
+        // Data (AAAA-MM-DD) de um ISO UTC no fuso de Manaus: o dia em que o CD marcou "Recebido no CD"
+        function dataManaus(iso) {
+            const d = new Date(iso);
+            return isNaN(d) ? null : d.toLocaleDateString('en-CA', { timeZone: 'America/Manaus' });
+        }
+
+        // Confirmação pela planilha (dia seguinte): compara a AGENDA CD da planilha com o dia do recebimento
+        function confirmacaoPlanilha(item) {
+            if ((item.status_cd || 'pendente') !== 'recebido') return '';
+            const recebido = dataManaus(item.recebido_em);
+            const planilha = item.planilha_agenda_cd;
+            if (!planilha) return '<div class="text-[10px] text-slate-400 mt-1">aguardando planilha</div>';
+            return planilha === recebido
+                ? '<div class="text-[10px] text-emerald-700 font-semibold mt-1">✓ confirmado na planilha</div>'
+                : `<div class="text-[10px] text-amber-700 font-semibold mt-1" title="A AGENDA CD da planilha é diferente do dia em que o CD confirmou">⚠ na planilha: ${formatarData(planilha)}</div>`;
+        }
+
+        // Entrega CD na aba do CD: depois do "Recebido no CD", mostra o dia do recebimento (e a confirmação da planilha)
+        function celulaEntregaCd(item) {
+            if ((item.status_cd || 'pendente') === 'recebido') {
+                return `<div class="font-semibold text-emerald-800">${formatarData(dataManaus(item.recebido_em))}</div>${confirmacaoPlanilha(item)}`;
+            }
+            return formatarData(item.entrega_cd);
+        }
+
         function seloSituacaoCd(item) {
             const nova = item.liberado_latam && !item.visto_cd_em
                 ? '<span class="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold mr-1">NOVA</span>' : '';
@@ -774,7 +799,7 @@
                     ? `<span class="bg-sky-100 text-sky-800 text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap">Coletado · ${formatarDataHora(item.coletado_em)}</span>`
                     : '<span class="bg-amber-100 text-amber-800 text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap">Aguardando coleta</span>';
             const quem = item.confirmado_por && status !== 'pendente' ? `<div class="text-[10px] text-slate-400 mt-1">por ${esc(item.confirmado_por)}</div>` : '';
-            return `<div class="flex items-center">${nova}${selo}</div>${quem}`;
+            return `<div class="flex items-center">${nova}${selo}</div>${quem}${confirmacaoPlanilha(item)}`;
         }
 
         function acoesCd(item) {
@@ -1538,7 +1563,7 @@
                             <td class="p-3 font-mono">${txt(item.cte)}</td>
                             <td class="p-3">${formatarData(item.data_coleta)}</td>
                             <td class="p-3">${formatarData(item.data_cte)}</td>
-                            <td class="p-3">${formatarData(item.entrega_cd)}</td>
+                            <td class="p-3">${celulaEntregaCd(item)}</td>
                             <td class="p-3 whitespace-nowrap">${formatarDataHora(item.liberado_em)}</td>
                             <td class="p-3">${seloSituacaoCd(item)}</td>
                             <td class="p-3 text-center">${acoesCd(item)}</td>
