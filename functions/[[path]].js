@@ -243,7 +243,7 @@ async function anexarAgendaPlanilha(env, coletas) {
 }
 
 // Coletas da planilha indexadas por Nº da coleta (1ª linha, como o notebook) e por NF (a coleta mais recente com ela).
-// ~460 linhas lidas; cache de 5 min (a planilha só muda nos Jobs das 8h e 12h).
+// ~460 linhas lidas; cache de 5 min (a planilha só muda nos Jobs das 11h30 e 15h30).
 let cacheMapaPlanilha = null;
 
 async function mapaColetasPlanilha(env) {
@@ -876,7 +876,7 @@ const SEP_TRANSPORTE = '\x1f'; // base_geral.transportes = "transportadora␟cte
 
 async function relatorio(env, p) {
   if (await tabelaPedidos(env) !== 'base_geral') {
-    return erro(503, 'O relatório volta quando a base geral terminar a primeira carga (Job do Databricks, 8h e 12h).');
+    return erro(503, 'O relatório volta quando a base geral terminar a primeira carga (Job do Databricks, 11h30 e 15h30).');
   }
   const ano = new Date().getFullYear();
   const de = p.get('de') || `${ano}-01-01`;
