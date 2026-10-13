@@ -20,7 +20,7 @@ de cargas para o CD de Manaus.
 
 ```
 Databricks (2 tabelas)
-   │  Job "portamkt - sync Databricks -> D1" (1 vez por dia, às 11h30, fuso America/Manaus)
+   │  Job "portamkt - sync Databricks -> D1" (1 vez por dia, às 12h30, fuso America/Manaus)
    ▼
 Cloudflare D1 (banco SQLite "portamkt-db")
    ▲
@@ -82,7 +82,7 @@ Login com usuário e senha (tabela `usuarios`). Três perfis:
 | `GET /api/me` | logado | `{username, perfil}` |
 | `GET /api/agendamentos` | admin | últimos 100 agendamentos (cartão "Inclusão de Coletas" da aba Consultas; desde 08/10 só o admin — CD e comercial recebem 403 e veem "Cargas em Trânsito") |
 | `GET /api/agendamentos?escopo=cd` | cd, admin | **todas** as coletas LATAM liberadas (aba "Disponível para Coleta"; recarrega ao abrir a aba) |
-| `GET /api/agendamentos?escopo=admin` | admin | todas as coletas LATAM, bloqueadas primeiro (Painel Admin; recarrega ao abrir a aba) |
+| `GET /api/agendamentos?escopo=admin` | admin | todas as coletas LATAM, bloqueadas primeiro (Painel Admin; recarrega ao abrir a aba). Antes de listar, cria como coleta **bloqueada** cada CT-e novo da LATAM (`ctes_latam`, últimos 7 dias, que ainda não está no portal nem está ENTREGUE na planilha; `origem = 'cte'`, no máximo a cada 5 min). Nas 3 listas de coletas, cada item traz `planilha` (achada pelo Nº da coleta, pelo CT-e ou por NF **do mesmo seller**) e `cte_latam` (NFs e emissão do CT-e, que valem sobre as da planilha) |
 | `POST /api/agendamentos` `{seller, transportadora, nota_fiscal, cte, data_coleta, data_cte, entrega_cd, status_etapa}` | admin | inclui coleta LATAM. `nota_fiscal` aceita várias NFs separadas por `/`. **Nasce bloqueada** (`liberado_latam = 0`) |
 | `PATCH /api/agendamentos/:id/latam` `{liberado_latam: true/false}` | admin | libera (avisa o CD: grava `liberado_em` e zera `visto_cd_em`, a coleta volta a ser NOVA) ou bloqueia a coleta |
 | `GET /api/agendamentos/novas` | cd, admin | `{novas}`: liberadas que o CD ainda não viu (contador no menu; a tela consulta ao entrar e a cada 5 min) |
@@ -110,7 +110,7 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 - `usuarios` — `id, username, senha (hash), perfil`
 - `agendamentos` (coletas LATAM) — `id, seller, transportadora, nota_fiscal (uma ou mais NFs só com números, separadas por "/", ex.: 617944/617945), cte, data_coleta, data_cte, entrega_cd, status_etapa, liberado_latam (0 = bloqueada, 1 = liberada para o CD), criado_em`. Só o admin inclui; a coleta nasce bloqueada e o admin libera no Painel Admin.
 
-**Tabelas espelhadas do Databricks** (somente leitura para o portal; o Job apaga/insere 1x por dia, às 11h30 de Manaus — **não editar à mão nem pelo portal**):
+**Tabelas espelhadas do Databricks** (somente leitura para o portal; o Job apaga/insere 1x por dia, às 12h30 de Manaus — **não editar à mão nem pelo portal**):
 - `entregas_mkt` ← `bemolonline.bol.dados_entregas_mkt_manifest_01`. Um pedido do marketplace por linha. Colunas principais: `pedido, ordem, nf, n_fornecedor (seller), dt_pedido, dt_liberacao, dt_faturamento, dt_entrega, no_prazo (NO PRAZO | SEM ENTREGA | FORA DO PRAZO), cidade, bairro, zona, uf, nota_fiscal_explode, data_coleta, emissao_cte, data_embarque, data_entrega`.
 - `tracking_aereo` ← `comercial.logint.f_tracking_aereo`. Um item de NF por linha, com CT-e, transportadora, datas de coleta/embarque/entrega, material e valores. A coluna `etapa` vem em código do sistema (`MANIFEST_01`, `VLPOSTNG_01`, `SCHEDULE_01`…), ainda sem tradução.
 - **`base_geral`** ← **as 3 bases unificadas pelo Job** (decisão da Emilly, 07/10): manifest da BOL + tracking aéreo + planilha **CONTROLE_AÉREO_2026.xlsx** dela (SharePoint, aba **"Marketplace"**, lida com Graph API e os secrets `BemolADL/client-id-cd`, `client-secret-cd`, `tenant-id-cd`). Uma linha por linha do manifest, com as mesmas colunas de `entregas_mkt` e mais: datas unificadas (`data_coleta`, `emissao_cte`, `data_embarque`, `data_entrega` = Entrega CD) e `fonte_entrega_cd` (manifest | tracking | planilha); `transportadora` e `cte` (tracking → planilha; vários separados por ", "); `transportes` (pares "transportadora␟cte" do tracking e da planilha, para as regras do relatório); e as colunas da planilha com prefixo `pl_` (`pl_ncoleta, pl_transportadora, pl_cte, pl_origem, pl_destino, pl_volumes, pl_peso, pl_valor_nota, pl_valor_frete, pl_data_coleta, pl_data_cte, pl_previsao_entrega, pl_chegada_mao, pl_agenda_cd, pl_meta, pl_lead_time, pl_dias_atraso, pl_status`; volumes, peso e valores são **da coleta inteira**).
@@ -118,7 +118,7 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
   - **Junção por NF do seller (10 dígitos) + seller**: o mesmo número de NF existe em sellers diferentes (232 NFs no manifest em 07/10). Seller pelo nome: manifest "Brascol"/"Vitrola"/"Tramontina", tracking `nome_forn` ("ONESHOP DISTRIBUIDORA" = Brascol), planilha FORNECEDOR. Itens do tracking de fornecedores que não são sellers do marketplace ficam de fora.
   - **Datas vazias, nesta ordem:** manifest → tracking (maior data válida entre os itens da NF; datas fora de 2000–2099 descartadas — há lixo como o ano 2231) → planilha (Entrega CD = AGENDA CD; **só na LATAM** embarque = DATA CTE, embarque no mesmo dia do CT-e). **Atenção:** a view do manifest junta o tracking só pelo número da NF, então ~200 pedidos traziam datas da NF de OUTRO fornecedor; as datas de tracking do manifest (e `emissao`) só valem quando a NF existe no tracking do mesmo seller.
   - O portal lê só `base_geral` (lista, filtros, indicadores, lead time, relatório) **depois que o Job registra a 1ª carga em `sync_log`** (`tabelaPedidos()` confere a cada 10 min); antes disso usa `entregas_mkt` e o relatório responde 503. Índices enxutos: `(dt_pedido DESC, pedido_compra DESC)`, `pedido_compra`, `nota_fiscal_explode` (busca por NF Bemol/ordem lê a tabela, ~18 mil linhas).
-- `ctes_latam` (migração 010, **ainda não aplicada**, ver seção 11) — CT-es emitidos pela LATAM (CNPJ raiz 02.012.862) para os sellers do marketplace, de `comercial.bemolcomercial.btracker_ctes`. Um CT-e por linha, com todas as NFs.
+- `ctes_latam` (migração 010) ← `comercial.bemolcomercial.btracker_ctes`: CT-es emitidos pela LATAM (CNPJ raiz 02.012.862) para os sellers do marketplace, desde 01/01/2026, **sem os cancelados** (`situacao = 2`). Um CT-e por linha (`cte` sem zeros à esquerda, `emissao`, `emissao_hora`, `seller`, `notas` "nota / nota", `qtd_notas`, valores). Na base geral, por NF + seller: a emissão do CT-e é a data da coleta, do CT-e e do embarque (depois do manifest e do tracking, antes da planilha), e `transportadora` = LATAM.
 - `controle_aereo` (migração 005) — criada para a 1ª versão da planilha e **não é mais usada** (vazia; a planilha entra direto na base geral). Pode ser apagada depois que o portal estiver na base geral.
 - `sync_log` — uma linha por execução do Job (`tabela, executado_em, total_origem, inseridos, removidos`).
 - **Onde está cada campo** (não confundir): na `base_geral` está tudo junto (use ela); nas tabelas de origem, `dt_faturamento`, `dt_entrega` e `no_prazo` só existem em `entregas_mkt`; `data_coleta`, `emissao_cte`, `data_embarque`, `data_entrega` (entrega no CD) e `emissao` estão em `tracking_aereo`; `liberado_latam`, `cte`, `entrega_cd` e `status_etapa` só em `agendamentos`.
@@ -158,7 +158,7 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 ## 10. Job do Databricks
 
 - Nome: `portamkt - sync Databricks -> D1` (ID `1025737974527673`), notebook em `/Users/emillymonte@bemol.com.br/portamkt/sync_d1`.
-- Roda no cluster compartilhado **DATA-COMERCIAL-01**, **1 vez por dia, às 11h30** de Manaus (pedido da Emilly em 09/10; de 08/10 a 09/10 foi 8h e 12h, antes só 8h). Atualiza todas as tabelas de uma vez, e o portal só muda nesse horário (só grava o que mudou desde a execução anterior; cada execução lê ~55 mil linhas para comparar). Tempo máximo 30 min (a execução com a base geral leva ~4 min). Falhas mandam e-mail. Para mudar horário/tempo máximo: editar `databricks/job.json` e rodar `ferramentas\atualizar_agendamento.ps1`.
+- Roda no cluster compartilhado **DATA-COMERCIAL-01**, **1 vez por dia, às 12h30** de Manaus (pedido da Emilly em 09/10; antes 8h e 12h, depois 11h30 e 15h30, depois só 11h30, tudo no mesmo dia). Atualiza todas as tabelas de uma vez, e o portal só muda nesse horário (só grava o que mudou desde a execução anterior; cada execução lê ~55 mil linhas para comparar). Tempo máximo 30 min (a execução com a base geral leva ~4 min). Falhas mandam e-mail. Para mudar horário/tempo máximo: editar `databricks/job.json` e rodar `ferramentas\atualizar_agendamento.ps1`.
 - Lê as duas tabelas sem linhas repetidas, calcula um hash por linha e só envia ao D1 o que mudou (insere novas, apaga as que sumiram). Tem trava: se a origem vier com menos da metade das linhas, aborta sem apagar nada.
 - Usa o secret `portamkt/cloudflare_token` do Databricks (API Token do Cloudflare com permissão D1:Edit).
 - A Emilly **não tem permissão de computação serverless** no workspace; por isso o Job usa o cluster DATA-COMERCIAL-01 (`0811-172632-o2hyyoxq`, desliga após 10 min parado). Existe também a política de cluster "comercial" (`001D0520A2F3F477`, para Jobs) como alternativa.
@@ -178,12 +178,6 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 ## 11. Pendências conhecidas
 
 - **Base geral (07/10):** migração 007 aplicada, código publicado e notebook enviado sem rodar. A 1ª carga (~18 mil linhas × 4 ≈ 72 mil gravações) fica para o Job de **08/10 às 12h** (o limite de 100 mil gravações zera à meia-noite UTC = 20h de Manaus). A 1ª carga saiu no Job de 08/10 às 8h (17.666 linhas; Entrega CD em 8.129 pedidos). Falta: apagar `controle_aereo` e, se nada mais usar, parar de sincronizar `entregas_mkt`. Depois, remova este item.
-- **CT-es da LATAM pelo btracker (09/10, em andamento):** feitos só a migração 010 (`ctes_latam`), o `schema.sql` e a leitura no
-  `databricks/sync_d1.py` (`ler_ctes_latam()`; na base geral a data de emissão do CT-e vira coleta = CT-e = embarque, antes da
-  planilha). **Nada disso está no ar:** a migração não foi aplicada e o notebook do Databricks é a versão anterior (conferido em
-  09/10 às 13h40; os Jobs das 8h e 12h deram certo). Ordem para terminar: aplicar a migração 010 **antes** de reenviar o notebook
-  (senão o Job falha ao gravar `ctes_latam`); depois API e tela (cada CT-e novo vira coleta LATAM bloqueada; as NFs do CT-e valem
-  sobre as da planilha). Decisões da Emilly em 09/10, comentadas no `sync_d1.py` e na migração.
 - Compartilhar o Job e a pasta do notebook com `carlossimoes@bemol.com.br` (Can Manage): a Emilly faz pela interface do Databricks (Permissions).
 - Traduzir os códigos da coluna `etapa` (`MANIFEST_01`, `VLPOSTNG_01`, …) para nomes legíveis.
 - Detalhe do tracking por NF (`/api/tracking`) já existe na API, mas ainda não tem tela.
@@ -267,8 +261,8 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
 26. **Filtro de transportadora em Pedidos Marketplace (09/10):** a pedido dela, o filtro "Status" virou "Transportadora", com
     as transportadoras da base geral (em 09/10: LLS, GRU - KM CARGO, LATAM, ESSENCIAL CARGO, KM CARGO) e "Sem transportadora"
     (~6 mil pedidos). A coluna Status (prazo) da tabela continua.
-27. **Job 1x por dia às 11h30 (09/10):** antes era 8h e 12h. Ela pediu 11h30 e 15h00. Um agendamento só não aceita minutos
-    diferentes, então ficou primeiro 11h30 e 15h30; no mesmo dia ela decidiu rodar só às 11h30. Aplicado no Databricks pelo
+27. **Job 1x por dia às 12h30 (09/10):** antes era 8h e 12h. Ela pediu 11h30 e 15h00. Um agendamento só não aceita minutos
+    diferentes, então ficou primeiro 11h30 e 15h30; no mesmo dia ela decidiu rodar só às 11h30 e, por fim, só às 12h30. Aplicado no Databricks pelo
     Claude com `jobs update` (mesmo conteúdo de `ferramentas\atualizar_agendamento.ps1`).
 28. **Cache do manifest reaproveitado entre Jobs (09/10):** a execução das 14h gravou 0 linhas novas em `entregas_mkt`, mesmo
     com a view já trazendo a NF 409436 no pedido 4509035154 da Brascol. Causa: `manifest...cache()` no cluster compartilhado
@@ -278,6 +272,18 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
     é lido 1x e vira uma cópia local (`spark.createDataFrame(_manifest.collect(), schema)`, ~18 mil linhas). Teste num
     notebook temporário: 17.959 linhas e a NF da Brascol presente. Nunca use `.cache()` nesse cluster.
     O notebook no Databricks recebeu a correção **sem** a parte dos CT-es LATAM (que ainda não está no ar), pelo script
-    `%LOCALAPPDATA%\pmkt\enviar_notebook.ps1` rodado pela Emilly. **Atenção:** o `sync_d1.py` do repositório tem os CT-es
-    LATAM; não reenvie ao Databricks antes de aplicar a migração 010.
+    `%LOCALAPPDATA%\pmkt\enviar_notebook.ps1` rodado pela Emilly.
+29. **CT-es da LATAM direto do btracker (09/10):** a Emilly perguntou se o portal conseguia puxar direto da base de CT-e. O
+    portal só lê o D1, então o Job copia `comercial.bemolcomercial.btracker_ctes` para `ctes_latam` (migração 010). O que
+    apareceu nos dados (Brascol, 08/09 a 08/10): 25 CT-es; `situacao = 2` é CT-e cancelado (713863 refeito como 713869);
+    há CT-e refeito sem cancelamento (722341 e 722358, mesmas 17 NFs; a planilha usa o 722358); **3 CT-es não estavam na
+    planilha** (728256, 731119, 733788); e a planilha tinha menos NFs que o CT-e em várias coletas (447: 7 na planilha,
+    19 no CT-e 732164). Decisões dela: cada CT-e novo vira coleta LATAM **bloqueada** (o admin libera); as NFs do CT-e valem
+    sobre as da planilha; a emissão do CT-e é a data da coleta e do embarque. Para não encher o Painel Admin de coletas
+    antigas, só viram coleta os CT-es dos últimos 7 dias que não estão ENTREGUE na planilha. Teste no Databricks (só
+    leitura): pedidos LATAM na base geral de 157 para 225. Testado num portal local com os casos reais (CT-e já no portal,
+    entregue, refeito, fora da planilha). Junto: a coleta achada por NF passou a respeitar o seller (antes uma NF da
+    Brascol podia pegar a coleta da Vitrola com o mesmo número). Migração, notebook e 1ª execução pelo script
+    `%LOCALAPPDATA%\pmkt\ctes_latam.ps1`, rodado pela Emilly em **13/10 às ~9h10** (24 CT-es em `ctes_latam`; base geral
+    com 331 linhas trocadas); o código do portal foi publicado logo depois.
 16. **Migrações 002, 003 e 004 aplicadas no banco real (07/10, ~10h).** A tabela `agendamentos` estava vazia, então a 003 não perdeu dados. Até então a inclusão de coleta LATAM dava erro (faltavam `cte`, `data_cte`, `entrega_cd`).

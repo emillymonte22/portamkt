@@ -223,6 +223,8 @@ const SQL_AGENDAMENTOS = {
 async function listarAgendamentos(env, escopo) {
   const sql = SQL_AGENDAMENTOS[escopo];
   if (!sql) return erro(400, 'escopo inválido');
+  // Painel Admin: os CT-es novos da LATAM entram como coletas bloqueadas antes de listar
+  if (escopo === 'admin') await criarColetasDosCtes(env);
   const { results } = await env.DB.prepare(sql).all();
   const coletas = results || [];
   await anexarAgendaPlanilha(env, coletas);
@@ -231,19 +233,28 @@ async function listarAgendamentos(env, escopo) {
 
 // A planilha CONTROLE_AÉREO tem prioridade (pedido da Emilly, 09/10): cada coleta do portal ganha `planilha` com os
 // dados da coleta na planilha — todas as NFs, CT-e, datas, AGENDA CD (= Entrega CD) e status —, achada pelo Nº da
-// coleta ou, sem ele, por qualquer uma das NFs. O "Recebido no CD" do CD vira conferência contra a AGENDA CD.
+// coleta, pelo CT-e ou por qualquer uma das NFs do mesmo seller (o mesmo número de NF existe em sellers diferentes:
+// a 409436 é da Brascol e da Vitrola). O "Recebido no CD" do CD vira conferência contra a AGENDA CD.
+// Acima da planilha, o CT-e da LATAM (`cte_latam`, do btracker): as NFs dele valem sobre as da planilha e a data de
+// emissão é a data da coleta e do CT-e (decisões da Emilly, 09/10).
 async function anexarAgendaPlanilha(env, coletas) {
   if (!coletas.length) return;
-  const { porNumero, porNf } = await mapaColetasPlanilha(env);
+  const [{ porNumero, porNfSeller, porCte }, ctes] = await Promise.all([mapaColetasPlanilha(env), mapaCtesLatam(env)]);
   for (const c of coletas) {
+    const cte = semZeros(c.cte);
     const notas = String(c.nota_fiscal || '').split('/').map(n => n.trim()).filter(Boolean);
-    c.planilha = (c.ncoleta && porNumero.get(String(c.ncoleta))) || notas.map(n => porNf.get(n)).find(Boolean) || null;
+    c.planilha = (c.ncoleta && porNumero.get(String(c.ncoleta))) || (cte && porCte.get(cte))
+      || notas.map(n => porNfSeller.get(`${c.seller}|${n}`)).find(Boolean) || null;
     c.planilha_agenda_cd = c.planilha?.agenda_cd || null;
+    c.cte_latam = (cte && ctes.get(cte)) || null;
   }
 }
 
-// Coletas da planilha indexadas por Nº da coleta (1ª linha, como o notebook) e por NF (a coleta mais recente com ela).
-// ~460 linhas lidas; cache de 5 min (a planilha só muda no Job das 11h30).
+const semZeros = v => String(v ?? '').trim().replace(/^0+/, '');
+
+// Coletas da planilha indexadas por Nº da coleta (1ª linha, como o notebook), por CT-e, por NF (a coleta mais recente
+// com ela, para a inclusão, que ainda não sabe o seller) e por seller + NF. ~460 linhas lidas; cache de 5 min
+// (a planilha só muda no Job das 12h30).
 let cacheMapaPlanilha = null;
 
 async function mapaColetasPlanilha(env) {
@@ -254,14 +265,72 @@ async function mapaColetasPlanilha(env) {
     ).all();
     const porNumero = new Map();
     const porNf = new Map();
+    const porNfSeller = new Map();
+    const porCte = new Map();
     for (const r of results || []) {
       const coleta = { ...r, seller: nomeSeller(r.fornecedor), notas_lista: notasDaPlanilha(r.notas) };
       if (!porNumero.has(String(r.ncoleta))) porNumero.set(String(r.ncoleta), coleta);
-      for (const nf of coleta.notas_lista) porNf.set(nf, coleta);
+      if (semZeros(r.cte)) porCte.set(semZeros(r.cte), coleta);
+      for (const nf of coleta.notas_lista) {
+        porNf.set(nf, coleta);
+        porNfSeller.set(`${coleta.seller}|${nf}`, coleta);
+      }
     }
-    cacheMapaPlanilha = { em: Date.now(), porNumero, porNf };
+    cacheMapaPlanilha = { em: Date.now(), porNumero, porNf, porNfSeller, porCte };
   }
   return cacheMapaPlanilha;
+}
+
+// ---------- CT-es da LATAM (tabela ctes_latam, do btracker, gravada pelo Job) ----------
+// Tabela pequena (um CT-e por linha, ~25 em out/2026); cache de 5 min.
+let cacheCtesLatam = null;
+
+async function mapaCtesLatam(env) {
+  if (!cacheCtesLatam || Date.now() - cacheCtesLatam.em > 5 * 60 * 1000) {
+    const { results } = await env.DB.prepare(
+      'SELECT cte, emissao, emissao_hora, seller, notas, qtd_notas FROM ctes_latam LIMIT 2000'
+    ).all();
+    const mapa = new Map();
+    for (const r of results || []) mapa.set(semZeros(r.cte), { ...r, notas_lista: notasDaPlanilha(r.notas) });
+    cacheCtesLatam = { em: Date.now(), mapa };
+  }
+  return cacheCtesLatam.mapa;
+}
+
+// Cada CT-e novo da LATAM vira coleta bloqueada no portal; o admin libera para o CD (decisão da Emilly, 09/10).
+// Só os emitidos nos últimos DIAS_CTE_NOVO dias (os antigos já passaram pela planilha) e que ainda não estão no portal
+// (pelo CT-e ou pelo Nº da coleta da planilha). Fica de fora o CT-e refeito: outro mais novo com as mesmas NFs
+// (ex.: 722341 e 722358, 21/09). Feito ao abrir o Painel Admin, no máximo a cada 5 min.
+const DIAS_CTE_NOVO = 7;
+let ultimaCriacaoCtes = 0;
+
+async function criarColetasDosCtes(env) {
+  if (Date.now() - ultimaCriacaoCtes < 5 * 60 * 1000) return;
+  ultimaCriacaoCtes = Date.now();
+  const desde = new Date(Date.now() - DIAS_CTE_NOVO * 86400000).toISOString().slice(0, 10);
+  const [ctes, { porCte }, { results: existentes }] = await Promise.all([
+    mapaCtesLatam(env),
+    mapaColetasPlanilha(env),
+    env.DB.prepare('SELECT cte, ncoleta FROM agendamentos LIMIT 5000').all(),
+  ]);
+  const ctesNoPortal = new Set((existentes || []).map(a => semZeros(a.cte)).filter(Boolean));
+  const coletasNoPortal = new Set((existentes || []).map(a => String(a.ncoleta || '')).filter(Boolean));
+  const todos = [...ctes.values()];
+  const novos = todos.filter(c => c.emissao >= desde && !ctesNoPortal.has(semZeros(c.cte))
+    && !todos.some(o => o.notas === c.notas && o.emissao_hora > c.emissao_hora));
+
+  const inserir = [];
+  for (const c of novos) {
+    const planilha = porCte.get(semZeros(c.cte));
+    if (planilha?.status === 'ENTREGUE' || (planilha?.ncoleta && coletasNoPortal.has(String(planilha.ncoleta)))) continue;
+    inserir.push(env.DB.prepare(
+      `INSERT INTO agendamentos (seller, transportadora, nota_fiscal, cte, data_coleta, data_cte, status_etapa,
+                                 liberado_latam, origem, ncoleta)
+       VALUES (?, 'LATAM', ?, ?, ?, ?, 'CT-e emitido', 0, 'cte', ?)`
+    ).bind(c.seller || '—', normalizarNotas(c.notas_lista.join('/')), semZeros(c.cte), c.emissao, c.emissao,
+      planilha?.ncoleta ? String(planilha.ncoleta) : null));
+  }
+  if (inserir.length) await env.DB.batch(inserir);
 }
 
 // "617980 / 617986" → ['617980', '617986'] (sem zeros à esquerda, como o portal guarda)
@@ -461,6 +530,7 @@ async function buscarColetasPlanilha(env, ncoleta = null) {
        AND status IN (${STATUS_A_CAMINHO.map(() => '?').join(', ')})
        ${ncoleta ? 'AND ncoleta = ?' : ''}
        AND ncoleta NOT IN (SELECT ncoleta FROM agendamentos WHERE ncoleta IS NOT NULL)
+       AND ltrim(COALESCE(cte, ''), '0') NOT IN (SELECT ltrim(cte, '0') FROM agendamentos WHERE cte IS NOT NULL AND cte <> '')
      ORDER BY linha`
   ).bind(...STATUS_A_CAMINHO, ...(ncoleta ? [ncoleta] : [])).all();
   const vistas = new Set();
@@ -876,7 +946,7 @@ const SEP_TRANSPORTE = '\x1f'; // base_geral.transportes = "transportadora␟cte
 
 async function relatorio(env, p) {
   if (await tabelaPedidos(env) !== 'base_geral') {
-    return erro(503, 'O relatório volta quando a base geral terminar a primeira carga (Job do Databricks, 11h30).');
+    return erro(503, 'O relatório volta quando a base geral terminar a primeira carga (Job do Databricks, 12h30).');
   }
   const ano = new Date().getFullYear();
   const de = p.get('de') || `${ano}-01-01`;

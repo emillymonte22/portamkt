@@ -338,8 +338,10 @@ def vazio_para_nulo(expr):
 # (ONESHOP = Brascol). Uma linha por NF de cada CT-e na origem. Só sellers do marketplace (decisão da Emilly, 09/10).
 # Vira: ctes_latam (um por CT-e, com todas as NFs: cada CT-e novo vira coleta no portal) e, por NF + seller, entra na
 # base geral: na LATAM a data do CT-e é a data da coleta e do embarque, e as NFs do CT-e valem sobre as da planilha.
+# situacao 2 = CT-e cancelado (ex.: 713863 refeito como 713869 com as mesmas NFs, 08/09; a planilha usa o novo): fica de fora.
 CTE_LATAM_RAIZ = "02012862"
 CTE_DESDE = "2026-01-01"
+CTE_CANCELADO = 2
 NOME_SELLER = {"BRASCOL": "Brascol", "VITROLA": "Vitrola", "TRAMONTINA": "Tramontina"}
 
 
@@ -350,7 +352,8 @@ def ler_ctes_latam():
          .withColumn("_cte", F.regexp_replace(F.col("cte").cast("string"), r"^0+", ""))
          .withColumn("_nfnum", F.regexp_replace(F.regexp_replace(F.col("nfe").cast("string"), r"\D", ""), r"^0+", ""))
          .where(F.col("_seller").isNotNull() & (cnpj_raiz == CTE_LATAM_RAIZ) & (F.col("emissao") >= F.lit(CTE_DESDE))
-                & (F.col("_cte") != "") & (F.col("_nfnum") != ""))
+                & (F.col("_cte") != "") & (F.col("_nfnum") != "")
+                & (F.coalesce(F.col("situacao").cast("int"), F.lit(0)) != CTE_CANCELADO))
          .withColumn("_nf", F.lpad("_nfnum", 10, "0")))
     nome_seller = F.create_map(*[x for k, v in NOME_SELLER.items() for x in (F.lit(k), F.lit(v))])
     por_cte = (t.groupBy("_cte", "_seller").agg(
