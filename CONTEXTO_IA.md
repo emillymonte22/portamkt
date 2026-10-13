@@ -61,7 +61,7 @@ Login com usuário e senha (tabela `usuarios`). Três perfis:
 | Perfil | Vê | Pode |
 |---|---|---|
 | `comercial` | Consultas, Indicadores, Relatórios | Só consultar |
-| `cd` | Consultas (só "Pedidos Marketplace", **sem** o cartão "Inclusão de Coletas (LATAM)"), Indicadores, Relatórios + "Disponível para Coleta (LATAM)" | Só consultar |
+| `cd` | Consultas (só "Pedidos Marketplace", **sem** o cartão "Coletas LATAM", antes "Inclusão de Coletas (LATAM)"), Indicadores, Relatórios + "Disponível para Coleta (LATAM)" | Só consultar |
 | `admin` | Tudo + "Painel Admin (Sinalização)" | **Incluir coletas LATAM** e liberar/bloquear cargas para o CD |
 
 ## 5. Autenticação e segurança (como funciona)
@@ -80,7 +80,7 @@ Login com usuário e senha (tabela `usuarios`). Três perfis:
 | `POST /api/login` `{username, senha}` | público | `{username, perfil}` + cookie |
 | `POST /api/logout` | qualquer | apaga o cookie |
 | `GET /api/me` | logado | `{username, perfil}` |
-| `GET /api/agendamentos` | admin | últimos 100 agendamentos (cartão "Inclusão de Coletas" da aba Consultas; desde 08/10 só o admin — CD e comercial recebem 403 e veem "Cargas em Trânsito") |
+| `GET /api/agendamentos` | admin | até 1.000 agendamentos, mais recentes primeiro (cartão "Coletas LATAM" da aba Consultas: a tela mostra só as 3 últimas e o resto com filtro de período ou pesquisa por NF/CT-e/seller, 13/10; desde 08/10 só o admin — CD e comercial recebem 403 e veem "Cargas em Trânsito") |
 | `GET /api/agendamentos?escopo=cd` | cd, admin | **todas** as coletas LATAM liberadas (aba "Disponível para Coleta"; recarrega ao abrir a aba) |
 | `GET /api/agendamentos?escopo=admin` | admin | todas as coletas LATAM, bloqueadas primeiro (Painel Admin; recarrega ao abrir a aba). Antes de listar, cria como coleta **bloqueada** cada CT-e novo da LATAM (`ctes_latam`, últimos 7 dias, que ainda não está no portal nem está ENTREGUE na planilha; `origem = 'cte'`, no máximo a cada 5 min). Nas 3 listas de coletas, cada item traz `planilha` (achada pelo Nº da coleta, pelo CT-e ou por NF **do mesmo seller**) e `cte_latam` (NFs e emissão do CT-e, que valem sobre as da planilha) |
 | `POST /api/agendamentos` `{seller, transportadora, nota_fiscal, cte, data_coleta, data_cte, entrega_cd, status_etapa}` | admin | inclui coleta LATAM. `nota_fiscal` aceita várias NFs separadas por `/`. **Nasce bloqueada** (`liberado_latam = 0`) |
@@ -297,4 +297,8 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
     leitura): Brascol W37–W41 de 0 para 41–56 pedidos com NF por semana (Pedido → NF 0,6–1,4 dia; NF → CTE 0,2–0,6),
     negativos 60 → 0, 438 de 18.148 linhas trocadas no D1. **Falta:** a Emilly enviar o notebook ao Databricks (o modo
     automático bloqueia o Claude); o Job das 12h30 seguinte traz os dados. Sem coluna nova (a `emissao` já existia).
+31. **Card "Coletas LATAM" (13/10):** a pedido dela, "Inclusão de Coletas (LATAM)" virou "Coletas LATAM", com filtro de
+    período (data da coleta; sem ela, o dia da inclusão) e pesquisa (NF, CT-e ou seller). Sem filtro, só as 3 últimas
+    coletas aparecem; o resto só com pesquisa. A API passou de 100 para 1.000 coletas nessa lista (tabela pequena), para a
+    pesquisa achar as antigas. Filtro feito na tela, sem consulta nova ao banco.
 16. **Migrações 002, 003 e 004 aplicadas no banco real (07/10, ~10h).** A tabela `agendamentos` estava vazia, então a 003 não perdeu dados. Até então a inclusão de coleta LATAM dava erro (faltavam `cte`, `data_cte`, `entrega_cd`).

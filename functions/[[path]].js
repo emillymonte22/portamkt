@@ -37,7 +37,7 @@ export async function onRequest(context) {
         const escopo = url.searchParams.get('escopo') || '';
         if (escopo === 'cd' && !['cd', 'admin'].includes(usuario.perfil)) return erro(403, 'Apenas CD e administrador');
         if (escopo === 'admin' && usuario.perfil !== 'admin') return erro(403, 'Apenas o administrador');
-        // A lista geral de inclusão (card "Inclusão de Coletas") é só do admin (pedido da Emilly em 08/10);
+        // A lista geral de inclusão (card "Coletas LATAM", antes "Inclusão de Coletas") é só do admin (pedido da Emilly em 08/10);
         // o CD vê as liberadas na aba Disponível para Coleta e todos veem "Cargas em Trânsito"
         if (escopo === '' && usuario.perfil !== 'admin') return erro(403, 'Apenas o administrador');
         return await listarAgendamentos(env, escopo);
@@ -214,7 +214,8 @@ function deBase64Url(texto) {
 // Admin: todas as LATAM, bloqueadas primeiro. A tabela é pequena; o LIMIT é só uma proteção (regra 12).
 const ORDEM_CD = `CASE WHEN visto_cd_em IS NULL THEN 0 WHEN status_cd = 'recebido' THEN 3 WHEN status_cd = 'coletado' THEN 2 ELSE 1 END`;
 const SQL_AGENDAMENTOS = {
-  '': 'SELECT * FROM agendamentos ORDER BY id DESC LIMIT 100',
+  // Card "Coletas LATAM": a tela mostra as 3 últimas e o resto só com filtro de período ou busca (13/10)
+  '': 'SELECT * FROM agendamentos ORDER BY id DESC LIMIT 1000',
   cd: `SELECT * FROM agendamentos WHERE UPPER(transportadora) = 'LATAM' AND liberado_latam = 1
        ORDER BY ${ORDEM_CD}, COALESCE(liberado_em, criado_em) DESC LIMIT 1000`,
   admin: `SELECT * FROM agendamentos WHERE UPPER(transportadora) = 'LATAM' ORDER BY liberado_latam, ${ORDEM_CD}, id DESC LIMIT 1000`,

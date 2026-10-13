@@ -209,11 +209,11 @@
                         <p id="transito-atualizado" class="text-right text-[11px] text-slate-400 mt-3"></p>
                     </div>
 
-                    <!-- 3. Inclusão e Gestão de Coletas (LATAM) — só o admin -->
+                    <!-- 3. Coletas LATAM (inclusão e lista; antes "Inclusão de Coletas (LATAM)") — só o admin -->
                     <div id="card-inclusao-coleta" class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <div class="flex justify-between items-center mb-4">
                             <div>
-                                <h3 class="text-base font-bold text-slate-800">Inclusão de Coletas (LATAM)</h3>
+                                <h3 class="text-base font-bold text-slate-800">Coletas LATAM</h3>
                                 <p class="text-xs text-slate-500">Registe dados de NFs, CT-es e coletas para envio automático à aba de Disponíveis para Coleta</p>
                             </div>
                             <button id="btn-incluir-coleta" onclick="toggleFormAgendamento()" class="hidden bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-lg transition shadow-sm">+ Incluir Coleta LATAM</button>
@@ -274,6 +274,24 @@
                             </form>
                         </div>
 
+                        <!-- Filtro: sem período nem busca, só as 3 últimas coletas -->
+                        <form onsubmit="event.preventDefault(); mostrarAgendamentos()" class="flex flex-wrap items-end gap-3 mb-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Coleta de</label>
+                                <input type="date" id="filtro-coletas-de" class="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Até</label>
+                                <input type="date" id="filtro-coletas-ate" class="px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+                            </div>
+                            <div class="flex-1 min-w-[180px]">
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Pesquisar</label>
+                                <input type="text" id="filtro-coletas-busca" placeholder="NF, CT-e ou seller" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white">
+                            </div>
+                            <button type="submit" class="px-4 py-2 text-xs font-semibold bg-[#003366] hover:bg-[#002B49] text-white rounded-lg">Pesquisar</button>
+                            <button type="button" onclick="limparFiltroColetas()" class="px-4 py-2 text-xs font-semibold bg-slate-200 text-slate-700 rounded-lg">Limpar</button>
+                        </form>
+
                         <div class="overflow-x-auto">
                             <table class="w-full text-left text-sm text-slate-600">
                                 <thead class="bg-slate-50 text-slate-700 uppercase text-xs">
@@ -293,6 +311,7 @@
                                 </tbody>
                             </table>
                         </div>
+                        <p id="coletas-resumo" class="text-right text-[11px] text-slate-400 mt-3"></p>
                     </div>
                 </div>
 
@@ -668,7 +687,7 @@
             };
             // Só o admin inclui coletas (a API também confere)
             document.getElementById('btn-incluir-coleta').classList.toggle('hidden', currentUser.perfil !== 'admin');
-            // Inclusão de Coletas (LATAM) só para o admin; CD e comercial veem "Cargas em Trânsito" (a API também confere)
+            // Coletas LATAM só para o admin; CD e comercial veem "Cargas em Trânsito" (a API também confere)
             document.getElementById('card-inclusao-coleta').classList.toggle('hidden', currentUser.perfil !== 'admin');
             for (const [aba, mostrar] of Object.entries(visivel)) {
                 const el = document.getElementById('menu-' + aba);
@@ -1560,9 +1579,37 @@
                 agendamentos = [];
             }
 
-            document.getElementById('tabela-agendamentos').innerHTML = agendamentos.length === 0
+            mostrarAgendamentos();
+        }
+
+        // Card "Coletas LATAM" (pedido da Emilly, 13/10): sem filtro, só as 3 últimas coletas; com período (data da
+        // coleta; sem ela, o dia da inclusão) ou busca (NF, CT-e ou seller), todas as que baterem
+        const COLETAS_SEM_FILTRO = 3;
+
+        function mostrarAgendamentos() {
+            const de = document.getElementById('filtro-coletas-de').value;
+            const ate = document.getElementById('filtro-coletas-ate').value;
+            const busca = document.getElementById('filtro-coletas-busca').value.trim().toLowerCase();
+            const filtrando = Boolean(de || ate || busca);
+            const lista = filtrando ? agendamentos.filter(item => {
+                const dia = dataColeta(item, 'data_coleta') || String(item.criado_em || '').slice(0, 10);
+                if (de && !(dia && dia >= de)) return false;
+                if (ate && !(dia && dia <= ate)) return false;
+                if (!busca) return true;
+                const textos = [item.seller, item.nota_fiscal, item.cte, item.planilha?.cte, item.cte_latam?.cte,
+                    ...(item.planilha?.notas_lista || []), ...(item.cte_latam?.notas_lista || [])];
+                return textos.some(t => String(t || '').toLowerCase().includes(busca));
+            }) : agendamentos.slice(0, COLETAS_SEM_FILTRO);
+
+            document.getElementById('coletas-resumo').textContent = filtrando
+                ? `${lista.length} coleta(s) encontrada(s)`
+                : agendamentos.length > COLETAS_SEM_FILTRO
+                    ? `Mostrando as ${COLETAS_SEM_FILTRO} últimas de ${agendamentos.length} coletas. Use o período ou a pesquisa para ver as outras.`
+                    : '';
+
+            document.getElementById('tabela-agendamentos').innerHTML = lista.length === 0
                 ? '<tr><td colspan="8" class="p-4 text-center text-slate-400">Nenhum registo encontrado.</td></tr>'
-                : agendamentos.map(item => `
+                : lista.map(item => `
                     <tr class="hover:bg-slate-50">
                         <td class="p-3 font-medium text-slate-900">${txt(item.seller)}</td>
                         <td class="p-3">${txt(item.transportadora)}</td>
@@ -1573,6 +1620,11 @@
                         <td class="p-3">${celulaEntregaCd(item)}</td>
                         <td class="p-3"><span class="bg-sky-100 text-sky-800 text-xs px-2.5 py-1 rounded-full font-medium">${txt(item.status_etapa)}</span></td>
                     </tr>`).join('');
+        }
+
+        function limparFiltroColetas() {
+            ['filtro-coletas-de', 'filtro-coletas-ate', 'filtro-coletas-busca'].forEach(id => document.getElementById(id).value = '');
+            mostrarAgendamentos();
         }
 
         // As abas do CD e do Admin buscam a própria lista no servidor sempre que abrem
