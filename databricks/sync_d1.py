@@ -398,14 +398,38 @@ def ler_datas_nf():
             .agg(F.array_sort(F.collect_set(data_txt("emissao"))).alias("bn_datas")))
 
 
-def montar_base_geral(manifest, planilha, ctes_nf, datas_nf):
-    m = manifest.toDF(*[c.lower() for c in manifest.columns])
+def nf_do_seller():
     # A NF do seller (nota_fiscal_explode) vem vazia em ~6 mil pedidos (a view a tira do tracking; LATAM não está
     # lá). numero_documento_nove_posicoes tem a mesma NF (igual em 100% dos 11.677 pedidos com as duas, 08/10):
     # quando a primeira falta, usa a segunda — senão a busca por NF e a junção com a planilha não acham o pedido.
     doc9 = F.regexp_replace(F.col("numero_documento_nove_posicoes").cast("string"), r"\D", "")
     nf_doc9 = F.when(F.regexp_replace(doc9, r"^0+", "") != "", F.lpad(F.regexp_replace(doc9, r"^0+", ""), 10, "0"))
-    m = m.withColumn("nota_fiscal_explode", F.coalesce(F.col("nota_fiscal_explode").cast("string"), nf_doc9))
+    return F.coalesce(F.col("nota_fiscal_explode").cast("string"), nf_doc9)
+
+
+# Pedidos antigos sem NF do seller saem do portal (manifest e base geral), pedido da Emilly em 13/10: em out/2026
+# eram ~326 pedidos até agosto com tudo vazio (ex.: 4508966647, Tramontina, 31/08). Sempre fica 1 mês inteiro sem
+# remover (a NF ainda pode vir): em outubro saem até 31/08, em novembro até 30/09, e assim por diante.
+def ultimo_dia_sem_nf(hoje):
+    primeiro_do_mes_passado = (hoje.replace(day=1) - timedelta(days=1)).replace(day=1)
+    return (primeiro_do_mes_passado - timedelta(days=1)).isoformat()
+
+
+SEM_NF_ATE = ultimo_dia_sem_nf(datetime.now(timezone(timedelta(hours=-4))).date())  # fuso de Manaus
+
+
+def remover_antigos_sem_nf(manifest):
+    # Tem NF = qualquer uma das duas colunas com número (nota_fiscal_explode pode vir "" com a de 9 posições preenchida)
+    tem_nf = F.lit(False)
+    for c in ("nota_fiscal_explode", "numero_documento_nove_posicoes"):
+        tem_nf = tem_nf | F.coalesce(F.regexp_replace(F.regexp_replace(F.col(c).cast("string"), r"\D", ""), r"^0+", "") != "", F.lit(False))
+    return manifest.where(tem_nf | F.col("dt_pedido").isNull()
+                          | (F.col("dt_pedido") > F.lit(SEM_NF_ATE)))
+
+
+def montar_base_geral(manifest, planilha, ctes_nf, datas_nf):
+    m = manifest.toDF(*[c.lower() for c in manifest.columns])
+    m = m.withColumn("nota_fiscal_explode", nf_do_seller())
     m = m.withColumn("_nf", nf10("nota_fiscal_explode")).withColumn("_seller", chave_seller("n_fornecedor"))
 
     t = spark.table("comercial.logint.f_tracking_aereo")
@@ -473,7 +497,7 @@ def montar_base_geral(manifest, planilha, ctes_nf, datas_nf):
 # mudanças (09/10: Jobs das 12h e 14h com 0 inseridos, pedidos da Brascol sem a NF que a view já tinha); e
 # .unpersist() falhou tentando recalcular esse cache antigo (chave do storage strdatafactory).
 _manifest = spark.table("bemolonline.bol.dados_entregas_mkt_manifest_01").distinct()
-manifest = spark.createDataFrame(_manifest.collect(), _manifest.schema)
+manifest = remover_antigos_sem_nf(spark.createDataFrame(_manifest.collect(), _manifest.schema))
 sincronizar("bemolonline.bol.dados_entregas_mkt_manifest_01", "entregas_mkt", manifest)
 sincronizar("comercial.logint.f_tracking_aereo", "tracking_aereo")
 ctes_latam, ctes_latam_nf = ler_ctes_latam()

@@ -116,6 +116,7 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 - **`base_geral`** ← **as 3 bases unificadas pelo Job** (decisão da Emilly, 07/10): manifest da BOL + tracking aéreo + planilha **CONTROLE_AÉREO_2026.xlsx** dela (SharePoint, aba **"Marketplace"**, lida com Graph API e os secrets `BemolADL/client-id-cd`, `client-secret-cd`, `tenant-id-cd`). Uma linha por linha do manifest, com as mesmas colunas de `entregas_mkt` e mais: datas unificadas (`data_coleta`, `emissao_cte`, `data_embarque`, `data_entrega` = Entrega CD) e `fonte_entrega_cd` (manifest | tracking | planilha); `transportadora` e `cte` (tracking → planilha; vários separados por ", "); `transportes` (pares "transportadora␟cte" do tracking e da planilha, para as regras do relatório); e as colunas da planilha com prefixo `pl_` (`pl_ncoleta, pl_transportadora, pl_cte, pl_origem, pl_destino, pl_volumes, pl_peso, pl_valor_nota, pl_valor_frete, pl_data_coleta, pl_data_cte, pl_previsao_entrega, pl_chegada_mao, pl_agenda_cd, pl_meta, pl_lead_time, pl_dias_atraso, pl_status`; volumes, peso e valores são **da coleta inteira**).
   - **NF do seller vazia no manifest (08/10):** a view tira `nota_fiscal_explode` do tracking, então pedidos sem tracking (toda a LATAM) vinham sem NF e não ligavam com a planilha — "Brascol com KM aparece, com LATAM não". `numero_documento_nove_posicoes` tem a mesma NF (igual em 100% dos 11.677 pedidos com as duas); o Job usa ela quando a primeira falta. Pedidos sem NF: 5.989 → 1.984; LATAM ligados à planilha: 13 → 142.
   - **Junção por NF do seller (10 dígitos) + seller**: o mesmo número de NF existe em sellers diferentes (232 NFs no manifest em 07/10). Seller pelo nome: manifest "Brascol"/"Vitrola"/"Tramontina", tracking `nome_forn` ("ONESHOP DISTRIBUIDORA" = Brascol), planilha FORNECEDOR. Itens do tracking de fornecedores que não são sellers do marketplace ficam de fora.
+  - **Pedidos antigos sem NF do seller saem (13/10):** o Job tira do manifest (e com isso de `entregas_mkt` e da `base_geral`) os pedidos sem NF do seller (nem `nota_fiscal_explode` nem `numero_documento_nove_posicoes`) com data até o fim do mês retrasado, sempre deixando 1 mês inteiro sem remover: em outubro saem até 31/08, em novembro até 30/09 (`SEM_NF_ATE` / `remover_antigos_sem_nf()` em `sync_d1.py`). Na 1ª vez saíram 568 pedidos (1.793 linhas, de 2024 a ago/2026).
   - **Data da NF do seller (`emissao`, 13/10):** vem de `comercial.bemolcomercial.btracker_notas` (seller = `nome_forn_emitente`; ONESHOP = Brascol; a Tramontina emite por várias empresas), por NF + seller: vale a 1ª emissão **no dia do pedido ou depois**; sem ela, a do tracking. Antes só o tracking trazia essa data (a LATAM não está lá) e o número da NF se repete entre anos (NF de 2025 em pedido de 2026).
   - **Datas vazias, nesta ordem:** manifest → tracking (maior data válida entre os itens da NF; datas fora de 2000–2099 descartadas — há lixo como o ano 2231) → planilha (Entrega CD = AGENDA CD; **só na LATAM** embarque = DATA CTE, embarque no mesmo dia do CT-e). **Atenção:** a view do manifest junta o tracking só pelo número da NF, então ~200 pedidos traziam datas da NF de OUTRO fornecedor; as datas de tracking do manifest (e `emissao`) só valem quando a NF existe no tracking do mesmo seller.
   - O portal lê só `base_geral` (lista, filtros, indicadores, lead time, relatório) **depois que o Job registra a 1ª carga em `sync_log`** (`tabelaPedidos()` confere a cada 10 min); antes disso usa `entregas_mkt` e o relatório responde 503. Índices enxutos: `(dt_pedido DESC, pedido_compra DESC)`, `pedido_compra`, `nota_fiscal_explode` (busca por NF Bemol/ordem lê a tabela, ~18 mil linhas).
@@ -287,7 +288,7 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
     Brascol podia pegar a coleta da Vitrola com o mesmo número). Migração, notebook e 1ª execução pelo script
     `%LOCALAPPDATA%\pmkt\ctes_latam.ps1`, rodado pela Emilly em **13/10 às ~9h10** (24 CT-es em `ctes_latam`; base geral
     com 331 linhas trocadas); o código do portal foi publicado logo depois.
-30. **Data da NF do seller pelo btracker (13/10, em andamento):** no Lead Time semanal da Brascol, "Pedido → NF Seller" e
+30. **Data da NF do seller pelo btracker (13/10):** no Lead Time semanal da Brascol, "Pedido → NF Seller" e
     "NF Seller → CTE" vinham `—` em todas as semanas: a data da NF (`emissao`) só vinha do tracking, e a Brascol recente é
     LATAM (fora do tracking). A pedido dela ("unificando com a NF e o CT-e para ser uma base só"), o Job passou a ler
     `btracker_notas` (`ler_datas_nf()` em `sync_d1.py`; cobre ~9,3 mil NFs dos 3 sellers em 2026; 236 das 239 NFs dos
@@ -295,8 +296,15 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
     ano anterior com o mesmo número, ex.: NF 384615 do pedido de 11/06/2026 com emissão em 24/09/2025), por isso o
     btracker vale antes do tracking e só a 1ª emissão no dia do pedido ou depois. Teste num notebook temporário (só
     leitura): Brascol W37–W41 de 0 para 41–56 pedidos com NF por semana (Pedido → NF 0,6–1,4 dia; NF → CTE 0,2–0,6),
-    negativos 60 → 0, 438 de 18.148 linhas trocadas no D1. **Falta:** a Emilly enviar o notebook ao Databricks (o modo
-    automático bloqueia o Claude); o Job das 12h30 seguinte traz os dados. Sem coluna nova (a `emissao` já existia).
+    negativos 60 → 0. Sem coluna nova (a `emissao` já existia). A Emilly enviou o notebook e rodou o Job em 13/10 ~16h
+    (base geral +438 / −456; a 2ª execução logo depois deu +0 / −0).
+32. **Pedidos antigos sem NF do seller removidos (13/10, em andamento):** a pedido dela, saem do portal os pedidos sem NF
+    do seller (tudo vazio na lista, ex.: 4508966647, Tramontina, 31/08) até o fim do mês retrasado, e o corte anda com
+    os meses deixando sempre 1 mês inteiro (em outubro até 31/08; em novembro até 30/09). Feito no Job, no manifest
+    antes de sincronizar, então vale para `entregas_mkt` e `base_geral` (apagar à mão não adianta: o Job recopia).
+    Teste num notebook temporário (só leitura): saem 568 pedidos / 1.793 linhas (de 2024 a ago/2026), nenhum com NF e
+    nenhum depois do corte; base geral 17.926 → 16.133. **Falta:** a Emilly enviar o notebook e rodar o Job (ou esperar
+    o das 12h30).
 31. **Card "Coletas LATAM" (13/10):** a pedido dela, "Inclusão de Coletas (LATAM)" virou "Coletas LATAM", com filtro de
     período (data da coleta; sem ela, o dia da inclusão) e pesquisa (NF, CT-e ou seller). Sem filtro, só as 3 últimas
     coletas aparecem; o resto só com pesquisa. A API passou de 100 para 1.000 coletas nessa lista (tabela pequena), para a
