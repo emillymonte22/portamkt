@@ -299,13 +299,13 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
     leitura): Brascol W37–W41 de 0 para 41–56 pedidos com NF por semana (Pedido → NF 0,6–1,4 dia; NF → CTE 0,2–0,6),
     negativos 60 → 0. Sem coluna nova (a `emissao` já existia). A Emilly enviou o notebook e rodou o Job em 13/10 ~16h
     (base geral +438 / −456; a 2ª execução logo depois deu +0 / −0).
-32. **Pedidos antigos sem NF do seller removidos (13/10, em andamento):** a pedido dela, saem do portal os pedidos sem NF
+32. **Pedidos antigos sem NF do seller removidos (13/10):** a pedido dela, saem do portal os pedidos sem NF
     do seller (tudo vazio na lista, ex.: 4508966647, Tramontina, 31/08) até o fim do mês retrasado, e o corte anda com
     os meses deixando sempre 1 mês inteiro (em outubro até 31/08; em novembro até 30/09). Feito no Job, no manifest
     antes de sincronizar, então vale para `entregas_mkt` e `base_geral` (apagar à mão não adianta: o Job recopia).
     Teste num notebook temporário (só leitura): saem 568 pedidos / 1.793 linhas (de 2024 a ago/2026), nenhum com NF e
-    nenhum depois do corte; base geral 17.926 → 16.133. **Falta:** a Emilly enviar o notebook e rodar o Job (ou esperar
-    o das 12h30).
+    nenhum depois do corte; base geral 17.926 → 16.133. A Emilly enviou o notebook e rodou o Job em 13/10 à tarde:
+    −1.793 linhas em `entregas_mkt` e em `base_geral`, igual ao teste.
 31. **Card "Coletas LATAM" (13/10):** a pedido dela, "Inclusão de Coletas (LATAM)" virou "Coletas LATAM", com filtro de
     período (data da coleta; sem ela, o dia da inclusão) e pesquisa (NF, CT-e ou seller). Sem filtro, só as 3 últimas
     coletas aparecem; o resto só com pesquisa. A API passou de 100 para 1.000 coletas nessa lista (tabela pequena), para a
@@ -320,6 +320,9 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
     "outra base", mas as datas já estão todas nela e uma tabela nova gastaria gravações do Job). Testado num portal
     local com pedidos de exemplo (completo, aguardando, cancelado, de ontem, NF demorada, outro mês, linha repetida).
     Os pedidos sem NF de antes do mês retrasado já saem pelo Job (item 32), então cancelados aparecem só nos meses recentes.
+    Depois, a pedido dela, o card de aviso mostra os dias sem NF de dois jeitos: **corridos** e **úteis** (sem sábado,
+    domingo e feriados nacionais; Sexta-feira Santa calculada pela Páscoa; Carnaval e Corpus Christi contam como dia útil
+    por serem ponto facultativo) — `diasUteis()` em `index.html`. A regra de "aguardando" (mais de 1 dia) segue em dias corridos.
 34. **Aviso vermelho do CD pela situação da coleta (13/10):** a pedido dela, o contador vermelho do menu "Disponível para
     Coleta", o fundo vermelho da linha e o selo NOVA valem enquanto a coleta está **aguardando coleta**; somem quando o
     CD confirma a coleta ou o recebimento (antes sumiam quando o CD só abria a aba). "Desfazer" volta o aviso. Testado

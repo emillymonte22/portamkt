@@ -533,7 +533,8 @@
                                         <th class="p-3">Pedido</th>
                                         <th class="p-3">Seller</th>
                                         <th class="p-3 whitespace-nowrap">Data do pedido</th>
-                                        <th class="p-3 text-right whitespace-nowrap">Dias sem NF</th>
+                                        <th class="p-3 text-right whitespace-nowrap">Dias sem NF<span class="block text-[10px] font-normal normal-case text-slate-500">corridos</span></th>
+                                        <th class="p-3 text-right whitespace-nowrap">Dias sem NF<span class="block text-[10px] font-normal normal-case text-slate-500">úteis (sem fim de semana e feriados)</span></th>
                                     </tr>
                                 </thead>
                                 <tbody id="tabela-ctl-aguardando" class="divide-y divide-slate-200"></tbody>
@@ -1542,6 +1543,33 @@
         // Diferença em dias entre duas datas AAAA-MM-DD (as duas em UTC, sem o problema do fuso da regra 2)
         const difDias = (de, ate) => de && ate ? (Date.parse(`${ate}T00:00:00Z`) - Date.parse(`${de}T00:00:00Z`)) / 86400000 : null;
 
+        // Dias úteis (13/10): conta os dias depois de "de" até "ate", sem sábado, domingo e feriados nacionais.
+        // Feriados fixos + Sexta-feira Santa (2 dias antes da Páscoa). Carnaval e Corpus Christi são ponto facultativo
+        // e contam como dia útil.
+        const FERIADOS_FIXOS = ['01-01', '04-21', '05-01', '09-07', '10-12', '11-02', '11-15', '11-20', '12-25'];
+        const cacheFeriados = {};
+        function feriadosNacionais(ano) {
+            if (!cacheFeriados[ano]) {
+                // Páscoa pelo algoritmo de Meeus/Jones/Butcher
+                const a = ano % 19, b = Math.floor(ano / 100), c = ano % 100, d = Math.floor(b / 4), e = b % 4;
+                const f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+                const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+                const mes = Math.floor((h + l - 7 * m + 114) / 31), dia = ((h + l - 7 * m + 114) % 31) + 1;
+                const sextaSanta = new Date(Date.UTC(ano, mes - 1, dia) - 2 * 86400000).toISOString().slice(0, 10);
+                cacheFeriados[ano] = new Set([...FERIADOS_FIXOS.map(md => `${ano}-${md}`), sextaSanta]);
+            }
+            return cacheFeriados[ano];
+        }
+        function diasUteis(de, ate) {
+            if (!de || !ate) return null;
+            let n = 0;
+            for (let t = Date.parse(`${de}T00:00:00Z`) + 86400000, fim = Date.parse(`${ate}T00:00:00Z`); t <= fim; t += 86400000) {
+                const d = new Date(t), iso = d.toISOString().slice(0, 10);
+                if (d.getUTCDay() % 6 !== 0 && !feriadosNacionais(d.getUTCFullYear()).has(iso)) n++;
+            }
+            return n;
+        }
+
         function situacaoPedido(p, hoje) {
             const semNf = !(Number(p.nf_seller) > 0) && !p.data_nf;
             const idade = difDias(p.dt_pedido, hoje);
@@ -1598,13 +1626,14 @@
             document.getElementById('ctl-cancelados').textContent = numero(situacoes.filter(s => s === 'cancelado').length);
 
             document.getElementById('tabela-ctl-aguardando').innerHTML = aguardando.length === 0
-                ? '<tr><td colspan="4" class="p-4 text-center text-slate-400">Nenhum pedido aguardando NF do seller.</td></tr>'
+                ? '<tr><td colspan="5" class="p-4 text-center text-slate-400">Nenhum pedido aguardando NF do seller.</td></tr>'
                 : aguardando.map(p => `
                     <tr class="hover:bg-amber-50/60">
                         <td class="p-3 font-semibold text-slate-900">${txt(p.pedido_compra)}</td>
                         <td class="p-3">${txt(p.seller)}</td>
                         <td class="p-3">${formatarData(p.dt_pedido)}</td>
                         <td class="p-3 text-right font-bold text-amber-600">${numero(difDias(p.dt_pedido, hoje))}</td>
+                        <td class="p-3 text-right font-bold text-amber-700">${numero(diasUteis(p.dt_pedido, hoje))}</td>
                     </tr>`).join('');
 
             const cartao = (rotulo, r, destaque) => `
