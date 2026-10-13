@@ -383,7 +383,22 @@ def ler_ctes_latam():
     return por_cte, por_nf
 
 
-def montar_base_geral(manifest, planilha, ctes_nf):
+# ---------- Data da NF do seller (comercial.bemolcomercial.btracker_notas) ----------
+# Um item de NF por linha; o seller é o emitente (nome_forn_emitente: ONESHOP = Brascol; a Tramontina emite por
+# várias empresas). Antes só o tracking trazia a data da NF, e a LATAM não está lá: o lead time Pedido → NF Seller
+# da Brascol ficava vazio. E o número da NF se repete de um ano para outro: a view do manifest trazia NF de 2025
+# em pedido de 2026 (ex.: NF 384615, pedido de 11/06/2026 com emissão 24/09/2025). Por isso vale a 1ª emissão do
+# btracker no dia do pedido ou depois, e só sem ela a do tracking (pedido da Emilly, 13/10).
+def ler_datas_nf():
+    n = (spark.table("comercial.bemolcomercial.btracker_notas")
+         .withColumn("_seller", chave_seller("nome_forn_emitente"))
+         .withColumn("_nfnum", F.regexp_replace(F.regexp_replace(F.col("nfe").cast("string"), r"\D", ""), r"^0+", ""))
+         .where(F.col("_seller").isNotNull() & (F.col("emissao") >= F.lit(CTE_DESDE)) & (F.col("_nfnum") != "")))
+    return (n.groupBy(F.lpad("_nfnum", 10, "0").alias("_nf"), "_seller")
+            .agg(F.array_sort(F.collect_set(data_txt("emissao"))).alias("bn_datas")))
+
+
+def montar_base_geral(manifest, planilha, ctes_nf, datas_nf):
     m = manifest.toDF(*[c.lower() for c in manifest.columns])
     # A NF do seller (nota_fiscal_explode) vem vazia em ~6 mil pedidos (a view a tira do tracking; LATAM não está
     # lá). numero_documento_nove_posicoes tem a mesma NF (igual em 100% dos 11.677 pedidos com as duas, 08/10):
@@ -413,7 +428,8 @@ def montar_base_geral(manifest, planilha, ctes_nf):
     p = planilha.withColumnRenamed("nota_fiscal_explode", "_nf").withColumnRenamed("seller", "_seller")
     p = p.toDF(*[c if c.startswith("_") else f"pl_{c}" for c in p.columns]).drop("pl_fornecedor")
 
-    b = m.join(tk, ["_nf", "_seller"], "left").join(ctes_nf, ["_nf", "_seller"], "left").join(p, ["_nf", "_seller"], "left")
+    b = (m.join(tk, ["_nf", "_seller"], "left").join(ctes_nf, ["_nf", "_seller"], "left")
+         .join(datas_nf, ["_nf", "_seller"], "left").join(p, ["_nf", "_seller"], "left"))
     latam = F.upper(F.col("pl_transportadora")).contains("LATAM")
     # A view do manifest junta o tracking só pelo número da NF: em ~200 pedidos (07/10) as datas de tracking dela
     # vêm da NF de OUTRO fornecedor com o mesmo número. Essas datas do manifest só valem quando a NF existe no
@@ -439,8 +455,11 @@ def montar_base_geral(manifest, planilha, ctes_nf):
         vazio_para_nulo(F.concat_ws(",", "tk_transportes", "bt_transportes", par_planilha)).alias("transportes"),
     ]
     colunas_pl = [c for c in p.columns if c.startswith("pl_")]
-    # emissao (data da NF do seller) também vem do tracking na view do manifest: mesma regra
-    manifest_cols = [F.when(tem_tk, F.col(c)).alias(c) if c == "emissao" else F.col(c) for c in COLUNAS_MANIFEST]
+    # emissao (data da NF do seller): btracker (1ª emissão no dia do pedido ou depois) → tracking na view do manifest
+    # (mesma regra das datas acima). array_min de lista vazia dá nulo (element_at daria erro com ANSI ligado).
+    bn_emissao = F.expr("array_min(filter(bn_datas, d -> d >= dt_pedido))")
+    emissao = F.coalesce(bn_emissao, F.when(tem_tk, F.col("emissao"))).alias("emissao")
+    manifest_cols = [emissao if c == "emissao" else F.col(c) for c in COLUNAS_MANIFEST]
     return b.select(*manifest_cols, *unificadas, *[F.col(c) for c in colunas_pl])
 
 
@@ -460,8 +479,8 @@ sincronizar("comercial.logint.f_tracking_aereo", "tracking_aereo")
 ctes_latam, ctes_latam_nf = ler_ctes_latam()
 sincronizar("btracker_ctes (LATAM)", "ctes_latam", ctes_latam)
 nfs_planilha, coletas_planilha = ler_controle_aereo()
-sincronizar("base geral (manifest + tracking + CT-e LATAM + planilha)", "base_geral",
-            montar_base_geral(manifest, nfs_planilha, ctes_latam_nf))
+sincronizar("base geral (manifest + tracking + CT-e LATAM + NFs btracker + planilha)", "base_geral",
+            montar_base_geral(manifest, nfs_planilha, ctes_latam_nf, ler_datas_nf()))
 sincronizar(f"planilha {PLANILHA_ABA} (coletas)", "coletas_planilha", coletas_planilha)
 
 
