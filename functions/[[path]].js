@@ -967,6 +967,20 @@ async function controlePedidos(env, p) {
   const seller = p.get('seller') || '';
   // so=aviso: só os recentes (contador do menu ao entrar no portal, sem ler o mês inteiro)
   const soAviso = p.get('so') === 'aviso';
+  // so=atrasados: e-mail de cobrança (13/10) — pedidos do seller SEM NF dos últimos 62 dias (o Job já tira os mais
+  // antigos), menos os de hoje e ontem; a tela escolhe o corte em dias corridos ou úteis. Só ao clicar no botão.
+  if (p.get('so') === 'atrasados') {
+    if (!seller) return erro(400, 'Escolha o seller');
+    const diasAtras = n => new Date(Date.parse(`${hoje}T00:00:00Z`) - n * 86400000).toISOString().slice(0, 10);
+    const { results } = await env.DB.prepare(
+      `SELECT ${COLUNAS_CONTROLE} FROM base_geral
+       WHERE dt_pedido BETWEEN ? AND ? AND pedido_compra IS NOT NULL AND n_fornecedor = ?
+       GROUP BY pedido_compra
+       HAVING MAX(NULLIF(nota_fiscal_explode, '')) IS NULL AND MAX(emissao) IS NULL
+       ORDER BY dt_pedido, pedido_compra LIMIT 1000`
+    ).bind(diasAtras(62), diasAtras(2), seller).all();
+    return Response.json({ seller, hoje, pedidos: results || [] });
+  }
 
   const chave = JSON.stringify([hoje, mes, seller, soAviso]);
   const guardado = cacheControle.get(chave);

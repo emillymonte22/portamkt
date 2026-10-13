@@ -542,6 +542,46 @@
                         </div>
                     </div>
 
+                    <!-- E-mail de cobrança por seller (a pessoa copia e envia pelo próprio e-mail) -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <h3 class="text-base font-bold text-slate-800">✉️ E-mail de cobrança por seller</h3>
+                        <p class="text-xs text-slate-500 mb-4">Monta um e-mail com os pedidos do seller sem NF há mais dos dias escolhidos (últimos 2 meses). O portal não envia: copie e envie pelo seu e-mail.</p>
+                        <form onsubmit="event.preventDefault(); montarEmailCobranca()" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Seller</label>
+                                <select id="email_seller" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                                    <option value="">Escolha</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Sem NF há mais de</label>
+                                <input type="number" id="email_dias" value="5" min="1" max="60" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Contar</label>
+                                <select id="email_contagem" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                                    <option value="corridos">Dias corridos</option>
+                                    <option value="uteis">Dias úteis</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="px-5 py-2 text-xs font-semibold bg-[#003366] hover:bg-[#002B49] text-white rounded-lg">Montar e-mail</button>
+                        </form>
+
+                        <div id="email-resultado" class="hidden mt-5 border border-slate-200 rounded-xl overflow-hidden">
+                            <div class="bg-slate-50 px-4 py-3 border-b border-slate-200 text-sm">
+                                <span class="text-xs font-semibold text-slate-500">Assunto:</span>
+                                <span id="email-assunto" class="font-semibold text-slate-800"></span>
+                            </div>
+                            <div id="email-corpo" class="px-4 py-4 text-sm text-slate-700 bg-white"></div>
+                            <div class="bg-slate-50 px-4 py-3 border-t border-slate-200 flex flex-wrap gap-2 items-center">
+                                <button type="button" onclick="copiarEmailCobranca()" class="px-4 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg">Copiar e-mail (com tabela)</button>
+                                <button type="button" onclick="copiarAssuntoCobranca()" class="px-4 py-2 text-xs font-semibold bg-slate-200 text-slate-700 rounded-lg">Copiar assunto</button>
+                                <a id="email-mailto" href="#" class="px-4 py-2 text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white rounded-lg">Abrir no programa de e-mail</a>
+                                <span id="email-aviso" class="text-xs text-slate-500"></span>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- Média de cada etapa no mês -->
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <h3 class="text-base font-bold text-slate-800">Média de dias por etapa</h3>
@@ -1061,6 +1101,8 @@
                 const opcoesSeller = '<option value="">Todos</option>' +
                     sellers.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
                 document.getElementById('f_seller').innerHTML = opcoesSeller;
+                document.getElementById('email_seller').innerHTML = '<option value="">Escolha</option>' +
+                    sellers.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
                 for (const id of ['ind_seller', 'rel_seller', 'lt_seller', 'ctl_seller']) {
                     const select = document.getElementById(id);
                     const escolhido = select.value;
@@ -1683,6 +1725,94 @@
             }).join('');
             document.getElementById('ctl-rodape').textContent =
                 `${numero(pedidos.length)} pedidos${ehMesAtual ? ' do mês atual' : ''} · embaixo de cada data, os dias desde a etapa anterior`;
+        }
+
+        // E-mail de cobrança (13/10): pedidos do seller sem NF há mais de N dias (corridos ou úteis). O portal só monta
+        // o texto; a pessoa copia (HTML com tabela, para colar no Outlook) ou abre no programa de e-mail (texto simples).
+        let emailCobranca = null;
+
+        async function montarEmailCobranca() {
+            const seller = document.getElementById('email_seller').value;
+            const limite = Number(document.getElementById('email_dias').value);
+            const uteis = document.getElementById('email_contagem').value === 'uteis';
+            const caixa = document.getElementById('email-resultado');
+            const corpo = document.getElementById('email-corpo');
+            caixa.classList.remove('hidden');
+            document.getElementById('email-assunto').textContent = '';
+            corpo.innerHTML = '<p class="text-slate-400">A carregar...</p>';
+            let dados;
+            try {
+                dados = await api('/api/controle-pedidos?' + new URLSearchParams({ so: 'atrasados', seller }));
+            } catch (err) {
+                corpo.innerHTML = `<p class="text-red-500">${esc(err.message)}</p>`;
+                return;
+            }
+            const contagem = uteis ? 'dias úteis' : 'dias';
+            const lista = dados.pedidos
+                .map(p => ({ ...p, corridos: difDias(p.dt_pedido, dados.hoje), uteis: diasUteis(p.dt_pedido, dados.hoje) }))
+                .filter(p => (uteis ? p.uteis : p.corridos) > limite);
+            if (!lista.length) {
+                emailCobranca = null;
+                corpo.innerHTML = `<p class="text-slate-500">Nenhum pedido de ${esc(seller)} sem NF há mais de ${numero(limite)} ${contagem}.</p>`;
+                document.getElementById('email-mailto').classList.add('hidden');
+                return;
+            }
+
+            const assunto = `Pedidos Bemol Marketplace sem nota fiscal há mais de ${limite} ${contagem} - ${seller}`;
+            const abertura = `Olá, equipe ${seller},`;
+            const texto1 = `Identificamos ${lista.length} pedido(s) do Marketplace Bemol ainda sem nota fiscal emitida há mais de ${limite} ${contagem}:`;
+            const texto2 = 'Por favor, nos informem a previsão de faturamento de cada pedido ou se algum deles foi cancelado.';
+            const fecho = 'Atenciosamente,';
+            const estiloCelula = 'border:1px solid #cbd5e1;padding:6px 10px;font-family:Arial,sans-serif;font-size:13px';
+            const tabela = `<table style="border-collapse:collapse;margin:12px 0">
+                <thead><tr style="background:#003366;color:#ffffff">
+                    <th style="${estiloCelula};text-align:left">Pedido de compra</th>
+                    <th style="${estiloCelula};text-align:left">Data do pedido</th>
+                    <th style="${estiloCelula};text-align:right">Dias corridos</th>
+                    <th style="${estiloCelula};text-align:right">Dias úteis</th>
+                </tr></thead>
+                <tbody>${lista.map(p => `<tr>
+                    <td style="${estiloCelula}">${esc(p.pedido_compra)}</td>
+                    <td style="${estiloCelula}">${formatarData(p.dt_pedido)}</td>
+                    <td style="${estiloCelula};text-align:right">${numero(p.corridos)}</td>
+                    <td style="${estiloCelula};text-align:right">${numero(p.uteis)}</td>
+                </tr>`).join('')}</tbody></table>`;
+            const paragrafo = t => `<p style="font-family:Arial,sans-serif;font-size:13px;margin:0 0 10px">${esc(t)}</p>`;
+            const html = paragrafo(abertura) + paragrafo(texto1) + tabela + paragrafo(texto2) + paragrafo(fecho);
+            const textoSimples = [abertura, '', texto1, '',
+                ...lista.map(p => `- Pedido ${p.pedido_compra} · ${formatarData(p.dt_pedido)} · ${p.corridos} dias corridos (${p.uteis} úteis)`),
+                '', texto2, '', fecho].join('\n');
+
+            emailCobranca = { assunto, html, textoSimples };
+            document.getElementById('email-assunto').textContent = assunto;
+            corpo.innerHTML = html;
+            // mailto só leva texto simples, e e-mails muito longos são cortados por alguns programas
+            const mailto = document.getElementById('email-mailto');
+            mailto.href = `mailto:?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(textoSimples)}`;
+            mailto.classList.toggle('hidden', mailto.href.length > 1800);
+            document.getElementById('email-aviso').textContent = mailto.href.length > 1800
+                ? 'Lista longa: use "Copiar e-mail" e cole no Outlook.' : '';
+        }
+
+        async function copiarEmailCobranca() {
+            if (!emailCobranca) return;
+            const aviso = document.getElementById('email-aviso');
+            try {
+                await navigator.clipboard.write([new ClipboardItem({
+                    'text/html': new Blob([emailCobranca.html], { type: 'text/html' }),
+                    'text/plain': new Blob([emailCobranca.textoSimples], { type: 'text/plain' }),
+                })]);
+                aviso.textContent = 'E-mail copiado. Cole no corpo da mensagem (Ctrl+V).';
+            } catch {
+                await navigator.clipboard.writeText(emailCobranca.textoSimples).catch(() => {});
+                aviso.textContent = 'Copiado como texto simples (o navegador não deixou copiar a tabela).';
+            }
+        }
+
+        async function copiarAssuntoCobranca() {
+            if (!emailCobranca) return;
+            await navigator.clipboard.writeText(emailCobranca.assunto).catch(() => {});
+            document.getElementById('email-aviso').textContent = 'Assunto copiado.';
         }
 
         // ---------- Extrair Relatório ----------
