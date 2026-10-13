@@ -967,8 +967,9 @@ async function controlePedidos(env, p) {
   const seller = p.get('seller') || '';
   // so=aviso: só os recentes (contador do menu ao entrar no portal, sem ler o mês inteiro)
   const soAviso = p.get('so') === 'aviso';
-  // so=atrasados: e-mail de cobrança (13/10) — pedidos do seller SEM NF dos últimos 62 dias (o Job já tira os mais
-  // antigos), menos os de hoje e ontem; a tela escolhe o corte em dias corridos ou úteis. Só ao clicar no botão.
+  // so=atrasados: e-mail de cobrança (13/10) — pedidos do seller SEM NF dos últimos 7 dias (pedido da Emilly; depois
+  // disso, sem nenhum dado, o pedido conta como cancelado), menos os de hoje e ontem; a tela escolhe o corte em dias
+  // corridos ou úteis. Só ao clicar no botão.
   if (p.get('so') === 'atrasados') {
     if (!seller) return erro(400, 'Escolha o seller');
     const diasAtras = n => new Date(Date.parse(`${hoje}T00:00:00Z`) - n * 86400000).toISOString().slice(0, 10);
@@ -978,7 +979,7 @@ async function controlePedidos(env, p) {
        GROUP BY pedido_compra
        HAVING MAX(NULLIF(nota_fiscal_explode, '')) IS NULL AND MAX(emissao) IS NULL
        ORDER BY dt_pedido, pedido_compra LIMIT 1000`
-    ).bind(diasAtras(62), diasAtras(2), seller).all();
+    ).bind(diasAtras(7), diasAtras(2), seller).all();
     return Response.json({ seller, hoje, pedidos: results || [] });
   }
 
@@ -992,11 +993,24 @@ async function controlePedidos(env, p) {
      WHERE dt_pedido BETWEEN ? AND ? AND pedido_compra IS NOT NULL ${seller ? 'AND n_fornecedor = ?' : ''}
      GROUP BY pedido_compra ORDER BY dt_pedido DESC, pedido_compra DESC LIMIT 5000`
   ).bind(de, ate, ...(seller ? [seller] : []));
-  const consultas = [consulta(diasAtras(7), diasAtras(2))];
+  // NF emitida e não coletada (13/10): pedidos dos últimos 62 dias com NF do seller há mais de 1 dia (a base só tem a
+  // data, então "24h depois" = NF de anteontem ou antes) e sem coleta nem nenhuma etapa seguinte
+  const semColeta = env.DB.prepare(
+    `SELECT ${COLUNAS_CONTROLE} FROM base_geral
+     WHERE dt_pedido BETWEEN ? AND ? AND pedido_compra IS NOT NULL ${seller ? 'AND n_fornecedor = ?' : ''}
+     GROUP BY pedido_compra
+     HAVING MAX(emissao) <= ? AND MAX(data_coleta) IS NULL AND MAX(emissao_cte) IS NULL AND MAX(data_embarque) IS NULL
+        AND MAX(data_entrega) IS NULL AND MAX(dt_faturamento) IS NULL AND MAX(dt_entrega) IS NULL
+     ORDER BY MAX(emissao), pedido_compra LIMIT 1000`
+  ).bind(diasAtras(62), hoje, ...(seller ? [seller] : []), diasAtras(2));
+  const consultas = [consulta(diasAtras(7), diasAtras(2)), semColeta];
   if (!soAviso) consultas.push(consulta(`${mes}-01`, `${mes}-31`));
-  const [recentes, doMes] = await env.DB.batch(consultas);
+  const [recentes, naoColetados, doMes] = await env.DB.batch(consultas);
 
-  const dados = { mes, seller, hoje, pedidos: doMes?.results || [], recentes: recentes.results || [] };
+  const dados = {
+    mes, seller, hoje, pedidos: doMes?.results || [], recentes: recentes.results || [],
+    sem_coleta: naoColetados.results || [],
+  };
   if (cacheControle.size > 50) cacheControle.clear();
   cacheControle.set(chave, { em: Date.now(), dados });
   return Response.json(dados);

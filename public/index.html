@@ -72,8 +72,8 @@
                 <button onclick="mudarAba('controle')" id="menu-controle" class="w-full hidden items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition">
                     <span>⏱️</span>
                     <span>Controle de Pedidos</span>
-                    <!-- Pedidos aguardando NF do seller há mais de 1 dia -->
-                    <span id="badge-controle" class="hidden ml-auto bg-amber-500 text-white text-[11px] font-bold min-w-[22px] text-center px-1.5 py-0.5 rounded-full" title="Pedidos aguardando NF do seller há mais de 1 dia"></span>
+                    <!-- Pedidos aguardando NF do seller há mais de 1 dia + NF emitida e não coletada há mais de 24h -->
+                    <span id="badge-controle" class="hidden ml-auto bg-amber-500 text-white text-[11px] font-bold min-w-[22px] text-center px-1.5 py-0.5 rounded-full" title="Pedidos sem NF do seller há mais de 1 dia + NF emitida e não coletada há mais de 24h"></span>
                 </button>
 
                 <!-- Menu Exclusivo CD e Admin -->
@@ -502,7 +502,7 @@
                     </div>
 
                     <!-- Cartões do mês -->
-                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="grid grid-cols-2 md:grid-cols-5 gap-4">
                         <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                             <p class="text-xs font-semibold text-slate-500">Pedidos no mês</p>
                             <p id="ctl-total" class="text-2xl font-bold text-[#003366] mt-1">—</p>
@@ -514,6 +514,10 @@
                         <div class="bg-white p-5 rounded-2xl shadow-sm border border-amber-200">
                             <p class="text-xs font-semibold text-amber-700">Aguardando NF do seller (+1 dia)</p>
                             <p id="ctl-aguardando" class="text-2xl font-bold text-amber-600 mt-1">—</p>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-orange-200">
+                            <p class="text-xs font-semibold text-orange-700">NF emitida e não coletada (+24h)</p>
+                            <p id="ctl-sem-coleta" class="text-2xl font-bold text-orange-600 mt-1">—</p>
                         </div>
                         <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                             <p class="text-xs font-semibold text-slate-500">Considerados cancelados no mês</p>
@@ -542,10 +546,32 @@
                         </div>
                     </div>
 
+                    <!-- Aviso: NF emitida e não coletada -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-orange-200">
+                        <h3 class="text-base font-bold text-orange-700">🚚 NF emitida e não coletada há mais de 24h</h3>
+                        <p class="text-xs text-slate-500 mb-4">Pedidos dos últimos 2 meses com NF do seller de anteontem ou antes e sem coleta nem nenhuma etapa seguinte (vale o seller do filtro, não o mês)</p>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm text-slate-600">
+                                <thead class="bg-orange-50 text-slate-700 uppercase text-xs">
+                                    <tr>
+                                        <th class="p-3">Pedido</th>
+                                        <th class="p-3">Seller</th>
+                                        <th class="p-3">Transportadora</th>
+                                        <th class="p-3">NF seller</th>
+                                        <th class="p-3 whitespace-nowrap">Data da NF</th>
+                                        <th class="p-3 text-right whitespace-nowrap">Dias sem coleta<span class="block text-[10px] font-normal normal-case text-slate-500">corridos</span></th>
+                                        <th class="p-3 text-right whitespace-nowrap">Dias sem coleta<span class="block text-[10px] font-normal normal-case text-slate-500">úteis (sem fim de semana e feriados)</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabela-ctl-sem-coleta" class="divide-y divide-slate-200"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <!-- E-mail de cobrança por seller (a pessoa copia e envia pelo próprio e-mail) -->
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
                         <h3 class="text-base font-bold text-slate-800">✉️ E-mail de cobrança por seller</h3>
-                        <p class="text-xs text-slate-500 mb-4">Monta um e-mail com os pedidos do seller sem NF há mais dos dias escolhidos (últimos 2 meses). O portal não envia: copie e envie pelo seu e-mail.</p>
+                        <p class="text-xs text-slate-500 mb-4">Monta um e-mail com os pedidos do seller dos últimos 7 dias sem NF há mais dos dias escolhidos. O portal não envia: copie e envie pelo seu e-mail.</p>
                         <form onsubmit="event.preventDefault(); montarEmailCobranca()" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                             <div>
                                 <label class="block text-xs font-semibold text-slate-600 mb-1">Seller</label>
@@ -555,7 +581,7 @@
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-slate-600 mb-1">Sem NF há mais de</label>
-                                <input type="number" id="email_dias" value="5" min="1" max="60" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
+                                <input type="number" id="email_dias" value="5" min="1" max="6" required class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm">
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-slate-600 mb-1">Contar</label>
@@ -1617,6 +1643,8 @@
             const idade = difDias(p.dt_pedido, hoje);
             if (semNf && idade > DIAS_CANCELADO && DATAS_CONTROLE.slice(2).every(([c]) => !p[c])) return 'cancelado';
             if (semNf && idade > DIAS_AGUARDANDO_NF) return 'aguardando';
+            // NF emitida há mais de 24h (data de anteontem ou antes) e nada depois dela: não coletada
+            if (p.data_nf && difDias(p.data_nf, hoje) > DIAS_AGUARDANDO_NF && DATAS_CONTROLE.slice(2).every(([c]) => !p[c])) return 'sem_coleta';
             return '';
         }
 
@@ -1640,9 +1668,10 @@
             const aguardando = dados.recentes.filter(p => situacaoPedido(p, dados.hoje) === 'aguardando');
             // O contador do menu vale para todos os sellers: só atualiza quando a consulta não tem seller
             if (!dados.seller) {
+                const avisos = aguardando.length + dados.sem_coleta.length;
                 const badge = document.getElementById('badge-controle');
-                badge.textContent = aguardando.length > 99 ? '99+' : String(aguardando.length);
-                badge.classList.toggle('hidden', !aguardando.length);
+                badge.textContent = avisos > 99 ? '99+' : String(avisos);
+                badge.classList.toggle('hidden', !avisos);
             }
             if (soAviso) return;
             mostrarControle(dados, aguardando);
@@ -1666,6 +1695,20 @@
             document.getElementById('ctl-leadtime').textContent = total.media === null ? '—' : `${umaCasa(total.media)} dias`;
             document.getElementById('ctl-aguardando').textContent = numero(aguardando.length);
             document.getElementById('ctl-cancelados').textContent = numero(situacoes.filter(s => s === 'cancelado').length);
+            document.getElementById('ctl-sem-coleta').textContent = numero(dados.sem_coleta.length);
+
+            document.getElementById('tabela-ctl-sem-coleta').innerHTML = dados.sem_coleta.length === 0
+                ? '<tr><td colspan="7" class="p-4 text-center text-slate-400">Nenhuma NF emitida aguardando coleta há mais de 24h.</td></tr>'
+                : dados.sem_coleta.map(p => `
+                    <tr class="hover:bg-orange-50/60">
+                        <td class="p-3 font-semibold text-slate-900">${txt(p.pedido_compra)}</td>
+                        <td class="p-3">${txt(p.seller)}</td>
+                        <td class="p-3">${txt(p.transportadora)}</td>
+                        <td class="p-3 font-mono">${txt(p.nf_seller)}</td>
+                        <td class="p-3">${formatarData(p.data_nf)}</td>
+                        <td class="p-3 text-right font-bold text-orange-600">${numero(difDias(p.data_nf, hoje))}</td>
+                        <td class="p-3 text-right font-bold text-orange-700">${numero(diasUteis(p.data_nf, hoje))}</td>
+                    </tr>`).join('');
 
             document.getElementById('tabela-ctl-aguardando').innerHTML = aguardando.length === 0
                 ? '<tr><td colspan="5" class="p-4 text-center text-slate-400">Nenhum pedido aguardando NF do seller.</td></tr>'
@@ -1703,7 +1746,9 @@
                 const selo = s === 'cancelado'
                     ? '<span class="block mt-1 w-fit bg-slate-200 text-slate-600 text-[10px] px-2 py-0.5 rounded-full font-semibold">considerado cancelado</span>'
                     : s === 'aguardando'
-                        ? '<span class="block mt-1 w-fit bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-semibold">aguardando NF</span>' : '';
+                        ? '<span class="block mt-1 w-fit bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-semibold">aguardando NF</span>'
+                        : s === 'sem_coleta'
+                            ? '<span class="block mt-1 w-fit bg-orange-100 text-orange-700 text-[10px] px-2 py-0.5 rounded-full font-semibold">NF sem coleta</span>' : '';
                 const celulas = DATAS_CONTROLE.map(([campo], j) => {
                     let etapa = '';
                     if (j > 0) {
@@ -1753,7 +1798,7 @@
                 .filter(p => (uteis ? p.uteis : p.corridos) > limite);
             if (!lista.length) {
                 emailCobranca = null;
-                corpo.innerHTML = `<p class="text-slate-500">Nenhum pedido de ${esc(seller)} sem NF há mais de ${numero(limite)} ${contagem}.</p>`;
+                corpo.innerHTML = `<p class="text-slate-500">Nenhum pedido de ${esc(seller)} dos últimos 7 dias sem NF há mais de ${numero(limite)} ${contagem}.</p>`;
                 document.getElementById('email-mailto').classList.add('hidden');
                 return;
             }
