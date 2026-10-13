@@ -68,12 +68,20 @@
                     <span>Extrair Relatório</span>
                 </button>
 
+                <!-- Menu de admin e comercial -->
+                <button onclick="mudarAba('controle')" id="menu-controle" class="w-full hidden items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition">
+                    <span>⏱️</span>
+                    <span>Controle de Pedidos</span>
+                    <!-- Pedidos aguardando NF do seller há mais de 1 dia -->
+                    <span id="badge-controle" class="hidden ml-auto bg-amber-500 text-white text-[11px] font-bold min-w-[22px] text-center px-1.5 py-0.5 rounded-full" title="Pedidos aguardando NF do seller há mais de 1 dia"></span>
+                </button>
+
                 <!-- Menu Exclusivo CD e Admin -->
                 <button onclick="mudarAba('cd-coleta')" id="menu-cd-coleta" class="w-full hidden items-center space-x-3 px-3 py-3 rounded-xl text-sm font-medium transition border border-emerald-600/40 mt-4">
                     <span>📦</span>
                     <span>Disponível para Coleta (LATAM)</span>
-                    <!-- Aviso de coleta nova: quantas liberadas o CD ainda não viu -->
-                    <span id="badge-cd" class="hidden ml-auto bg-red-600 text-white text-[11px] font-bold min-w-[22px] text-center px-1.5 py-0.5 rounded-full" title="Coletas novas liberadas para o CD"></span>
+                    <!-- Aviso de coleta disponível: liberadas que o CD ainda não confirmou (some ao confirmar coleta ou recebimento) -->
+                    <span id="badge-cd" class="hidden ml-auto bg-red-600 text-white text-[11px] font-bold min-w-[22px] text-center px-1.5 py-0.5 rounded-full" title="Coletas LATAM disponíveis aguardando o CD"></span>
                 </button>
 
                 <!-- Menu Exclusivo Admin -->
@@ -465,6 +473,97 @@
                     </div>
                 </div>
 
+                <!-- CONTEÚDO: CONTROLE DE PEDIDOS (admin e comercial) -->
+                <div id="conteudo-controle" class="space-y-6 hidden">
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <div class="flex justify-between items-start mb-4">
+                            <div>
+                                <h3 class="text-base font-bold text-slate-800">Controle de Pedidos</h3>
+                                <p class="text-xs text-slate-500">Um pedido de compra por linha · data de cada etapa e, embaixo, os dias desde a etapa anterior</p>
+                            </div>
+                            <span id="ctl-periodo" class="text-xs text-slate-400"></span>
+                        </div>
+                        <form onsubmit="event.preventDefault(); carregarControle()" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Mês do pedido</label>
+                                <input type="month" id="ctl_mes" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Seller</label>
+                                <select id="ctl_seller" class="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                                    <option value="">Todos</option>
+                                </select>
+                            </div>
+                            <div class="md:col-span-2 flex gap-2">
+                                <button type="submit" class="px-5 py-2 text-xs font-semibold bg-[#003366] hover:bg-[#002B49] text-white rounded-lg">Pesquisar</button>
+                                <button type="button" onclick="document.getElementById('ctl_mes').value = mesAtual(); carregarControle()" class="px-4 py-2 text-xs font-semibold bg-slate-200 text-slate-700 rounded-lg">Mês atual</button>
+                            </div>
+                        </form>
+                    </div>
+
+                    <!-- Cartões do mês -->
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                            <p class="text-xs font-semibold text-slate-500">Pedidos no mês</p>
+                            <p id="ctl-total" class="text-2xl font-bold text-[#003366] mt-1">—</p>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                            <p class="text-xs font-semibold text-slate-500">Lead time médio (pedido → cliente)</p>
+                            <p id="ctl-leadtime" class="text-2xl font-bold text-[#003366] mt-1">—</p>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-amber-200">
+                            <p class="text-xs font-semibold text-amber-700">Aguardando NF do seller (+1 dia)</p>
+                            <p id="ctl-aguardando" class="text-2xl font-bold text-amber-600 mt-1">—</p>
+                        </div>
+                        <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                            <p class="text-xs font-semibold text-slate-500">Considerados cancelados no mês</p>
+                            <p id="ctl-cancelados" class="text-2xl font-bold text-slate-500 mt-1">—</p>
+                            <p class="text-[10px] text-slate-400 mt-1">sem NF e sem nenhuma data há mais de 7 dias</p>
+                        </div>
+                    </div>
+
+                    <!-- Aviso: NF do seller atrasada -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-amber-200">
+                        <h3 class="text-base font-bold text-amber-700">⚠ Pedidos sem NF do seller há mais de 1 dia</h3>
+                        <p class="text-xs text-slate-500 mb-4">Pedidos de 2 a 7 dias atrás que o seller ainda não faturou (vale o seller do filtro, não o mês)</p>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm text-slate-600">
+                                <thead class="bg-amber-50 text-slate-700 uppercase text-xs">
+                                    <tr>
+                                        <th class="p-3">Pedido</th>
+                                        <th class="p-3">Seller</th>
+                                        <th class="p-3 whitespace-nowrap">Data do pedido</th>
+                                        <th class="p-3 text-right whitespace-nowrap">Dias sem NF</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="tabela-ctl-aguardando" class="divide-y divide-slate-200"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Média de cada etapa no mês -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <h3 class="text-base font-bold text-slate-800">Média de dias por etapa</h3>
+                        <p class="text-xs text-slate-500 mb-4">Só os pedidos com as duas datas da etapa (datas fora de ordem ficam de fora)</p>
+                        <div id="ctl-medias" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3"></div>
+                    </div>
+
+                    <!-- Pedidos -->
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-sm text-slate-600">
+                                <thead class="bg-slate-50 text-slate-700 uppercase text-xs">
+                                    <tr id="ctl-cabecalho"></tr>
+                                </thead>
+                                <tbody id="tabela-controle" class="divide-y divide-slate-200">
+                                    <tr><td colspan="11" class="p-4 text-center text-slate-400">A carregar...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p id="ctl-rodape" class="text-right text-[11px] text-slate-400 mt-3"></p>
+                    </div>
+                </div>
+
                 <!-- CONTEÚDO: EXTRAIR RELATÓRIO -->
                 <div id="conteudo-relatorios" class="space-y-6 hidden">
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
@@ -608,6 +707,7 @@
             'consultas':    { titulo: 'Consultas', ativo: 'bg-sky-600 text-white shadow-md', inativo: 'text-sky-200 hover:bg-sky-900/40' },
             'indicadores':  { titulo: 'Indicadores', ativo: 'bg-sky-600 text-white shadow-md', inativo: 'text-sky-200 hover:bg-sky-900/40' },
             'relatorios':   { titulo: 'Extrair Relatório', ativo: 'bg-sky-600 text-white shadow-md', inativo: 'text-sky-200 hover:bg-sky-900/40' },
+            'controle':     { titulo: 'Controle de Pedidos', ativo: 'bg-sky-600 text-white shadow-md', inativo: 'text-sky-200 hover:bg-sky-900/40' },
             'cd-coleta':    { titulo: 'Disponível para Coleta — LATAM', ativo: 'bg-emerald-600 text-white shadow-md', inativo: 'text-emerald-300 hover:bg-emerald-900/40' },
             'admin-painel': { titulo: 'Painel Administrativo — Sinalização', ativo: 'bg-amber-600 text-white shadow-md', inativo: 'text-amber-300 hover:bg-amber-900/40' },
         };
@@ -684,6 +784,7 @@
             const visivel = {
                 'cd-coleta': ['cd', 'admin'].includes(currentUser.perfil),
                 'admin-painel': currentUser.perfil === 'admin',
+                'controle': ['admin', 'comercial'].includes(currentUser.perfil),
             };
             // Só o admin inclui coletas (a API também confere)
             document.getElementById('btn-incluir-coleta').classList.toggle('hidden', currentUser.perfil !== 'admin');
@@ -706,7 +807,7 @@
                 el.classList.remove(...cfg.ativo.split(' '), ...cfg.inativo.split(' '));
                 el.classList.add(...(ativo ? cfg.ativo : cfg.inativo).split(' '));
             }
-            const especificas = ['consultas', 'indicadores', 'relatorios', 'cd-coleta', 'admin-painel'];
+            const especificas = ['consultas', 'indicadores', 'relatorios', 'controle', 'cd-coleta', 'admin-painel'];
             for (const id of especificas) {
                 const el = document.getElementById('conteudo-' + id);
                 if (el) el.classList.toggle('hidden', id !== aba);
@@ -722,6 +823,8 @@
             // Indicadores carregam na primeira abertura; depois, só pelo botão Atualizar (economiza leituras do D1)
             if (aba === 'indicadores' && !indicadoresCarregados) carregarIndicadores();
             if (aba === 'relatorios' && !transportadorasCarregadas) carregarTransportadoras();
+            // Controle de Pedidos: na primeira abertura; depois, pelo Pesquisar
+            if (aba === 'controle' && !controleCarregado) carregarControle();
             if (aba === 'cd-coleta') carregarCdLatam();
             if (aba === 'admin-painel') carregarAdminSinalizacao();
         }
@@ -731,6 +834,8 @@
             carregarStatusSync();
             if (currentUser.perfil === 'admin') carregarAgendamentos();
             carregarTransito();
+            // Aviso de NF do seller atrasada no menu Controle de Pedidos (1 consulta, em cache no servidor)
+            if (['admin', 'comercial'].includes(currentUser.perfil)) carregarControle({ soAviso: true });
             // Pedidos Marketplace só carregam quando a pessoa clica em Pesquisar
             // Aviso de coleta nova (CD e admin): agora e a cada 5 min enquanto o portal estiver aberto
             if (['cd', 'admin'].includes(currentUser.perfil)) {
@@ -833,9 +938,10 @@
         }
 
         function seloSituacaoCd(item) {
-            const nova = item.liberado_latam && !item.visto_cd_em
-                ? '<span class="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold mr-1">NOVA</span>' : '';
             const status = item.status_cd || 'pendente';
+            // Selo vermelho só enquanto a coleta está disponível; some quando o CD confirma a coleta ou o recebimento (13/10)
+            const nova = item.liberado_latam && !item.visto_cd_em && status === 'pendente'
+                ? '<span class="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded-full font-bold mr-1">NOVA</span>' : '';
             const selo = status === 'recebido'
                 ? `<span class="bg-emerald-100 text-emerald-800 text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap">Recebido no CD · ${formatarDataHora(item.recebido_em)}</span>`
                 : status === 'coletado'
@@ -860,6 +966,7 @@
             try {
                 await api(`/api/agendamentos/${id}/cd`, { method: 'PATCH', body: JSON.stringify({ acao }) });
                 await carregarCdLatam();
+                atualizarAvisoCd(); // a coleta confirmada sai do contador vermelho do menu
                 if (!document.getElementById('conteudo-admin-painel').classList.contains('hidden')) carregarAdminSinalizacao();
             } catch (err) {
                 alert('Erro ao confirmar: ' + err.message);
@@ -953,7 +1060,7 @@
                 const opcoesSeller = '<option value="">Todos</option>' +
                     sellers.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
                 document.getElementById('f_seller').innerHTML = opcoesSeller;
-                for (const id of ['ind_seller', 'rel_seller', 'lt_seller']) {
+                for (const id of ['ind_seller', 'rel_seller', 'lt_seller', 'ctl_seller']) {
                     const select = document.getElementById(id);
                     const escolhido = select.value;
                     select.innerHTML = opcoesSeller;
@@ -1418,6 +1525,137 @@
                 </tr>`).join('');
         }
 
+        // ---------- Controle de Pedidos (admin e comercial, 13/10) ----------
+        // As 8 datas do pedido em ordem; cada etapa = dias entre uma data e a seguinte. Pedido sem NF do seller há mais
+        // de 1 dia = aguardando NF (aviso); sem NF e sem nenhuma data há mais de 7 dias = considerado cancelado.
+        let controleCarregado = false;
+        const DATAS_CONTROLE = [
+            ['dt_pedido', 'Pedido'], ['data_nf', 'NF seller'], ['data_coleta', 'Coleta'], ['data_cte', 'CT-e'],
+            ['data_embarque', 'Embarque'], ['entrega_cd', 'Entrega CD'], ['faturamento', 'Faturamento'], ['entrega_cliente', 'Entrega cliente'],
+        ];
+        const ETAPAS_CONTROLE = DATAS_CONTROLE.slice(1).map(([campo, rotulo], i) =>
+            ({ de: DATAS_CONTROLE[i][0], ate: campo, rotulo: `${DATAS_CONTROLE[i][1]} → ${rotulo}` }));
+        const DIAS_AGUARDANDO_NF = 1;
+        const DIAS_CANCELADO = 7;
+
+        const mesAtual = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Manaus' }).slice(0, 7);
+        // Diferença em dias entre duas datas AAAA-MM-DD (as duas em UTC, sem o problema do fuso da regra 2)
+        const difDias = (de, ate) => de && ate ? (Date.parse(`${ate}T00:00:00Z`) - Date.parse(`${de}T00:00:00Z`)) / 86400000 : null;
+
+        function situacaoPedido(p, hoje) {
+            const semNf = !(Number(p.nf_seller) > 0) && !p.data_nf;
+            const idade = difDias(p.dt_pedido, hoje);
+            if (semNf && idade > DIAS_CANCELADO && DATAS_CONTROLE.slice(2).every(([c]) => !p[c])) return 'cancelado';
+            if (semNf && idade > DIAS_AGUARDANDO_NF) return 'aguardando';
+            return '';
+        }
+
+        async function carregarControle({ soAviso = false } = {}) {
+            const mesEl = document.getElementById('ctl_mes');
+            if (!mesEl.value) mesEl.value = mesAtual();
+            const params = new URLSearchParams(soAviso ? { so: 'aviso' } : { mes: mesEl.value, seller: document.getElementById('ctl_seller').value });
+            const tbody = document.getElementById('tabela-controle');
+            if (!soAviso) {
+                controleCarregado = true;
+                tbody.innerHTML = '<tr><td colspan="11" class="p-4 text-center text-slate-400">A carregar...</td></tr>';
+            }
+            let dados;
+            try {
+                dados = await api('/api/controle-pedidos?' + params);
+            } catch (err) {
+                if (!soAviso) tbody.innerHTML = `<tr><td colspan="11" class="p-4 text-center text-red-500">${esc(err.message)}</td></tr>`;
+                return;
+            }
+
+            const aguardando = dados.recentes.filter(p => situacaoPedido(p, dados.hoje) === 'aguardando');
+            // O contador do menu vale para todos os sellers: só atualiza quando a consulta não tem seller
+            if (!dados.seller) {
+                const badge = document.getElementById('badge-controle');
+                badge.textContent = aguardando.length > 99 ? '99+' : String(aguardando.length);
+                badge.classList.toggle('hidden', !aguardando.length);
+            }
+            if (soAviso) return;
+            mostrarControle(dados, aguardando);
+        }
+
+        function mostrarControle(dados, aguardando) {
+            const { pedidos, hoje, mes } = dados;
+            const ehMesAtual = mes === hoje.slice(0, 7);
+            const [ano, m] = mes.split('-');
+            document.getElementById('ctl-periodo').textContent = `${NOMES_MESES[Number(m) - 1]}/${ano}${ehMesAtual ? ' · mês atual' : ''}`;
+
+            const situacoes = pedidos.map(p => situacaoPedido(p, hoje));
+            const validos = pedidos.filter((_, i) => situacoes[i] !== 'cancelado');
+            const media = (de, ate) => {
+                const vals = validos.map(p => difDias(p[de], p[ate])).filter(v => v !== null && v >= 0);
+                return { media: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null, n: vals.length };
+            };
+            const total = media('dt_pedido', 'entrega_cliente');
+
+            document.getElementById('ctl-total').textContent = numero(pedidos.length);
+            document.getElementById('ctl-leadtime').textContent = total.media === null ? '—' : `${umaCasa(total.media)} dias`;
+            document.getElementById('ctl-aguardando').textContent = numero(aguardando.length);
+            document.getElementById('ctl-cancelados').textContent = numero(situacoes.filter(s => s === 'cancelado').length);
+
+            document.getElementById('tabela-ctl-aguardando').innerHTML = aguardando.length === 0
+                ? '<tr><td colspan="4" class="p-4 text-center text-slate-400">Nenhum pedido aguardando NF do seller.</td></tr>'
+                : aguardando.map(p => `
+                    <tr class="hover:bg-amber-50/60">
+                        <td class="p-3 font-semibold text-slate-900">${txt(p.pedido_compra)}</td>
+                        <td class="p-3">${txt(p.seller)}</td>
+                        <td class="p-3">${formatarData(p.dt_pedido)}</td>
+                        <td class="p-3 text-right font-bold text-amber-600">${numero(difDias(p.dt_pedido, hoje))}</td>
+                    </tr>`).join('');
+
+            const cartao = (rotulo, r, destaque) => `
+                <div class="p-3 rounded-xl border ${destaque ? 'bg-sky-50 border-sky-200' : 'bg-slate-50 border-slate-200'}">
+                    <p class="text-[11px] font-semibold text-slate-500 leading-tight">${esc(rotulo)}</p>
+                    <p class="text-xl font-bold text-[#003366] mt-1">${umaCasa(r.media)}</p>
+                    <p class="text-[10px] text-slate-400">${r.n ? `dias · ${numero(r.n)} ped.` : 'sem pedidos com as duas datas'}</p>
+                </div>`;
+            document.getElementById('ctl-medias').innerHTML =
+                ETAPAS_CONTROLE.map(e => cartao(e.rotulo, media(e.de, e.ate))).join('') + cartao('Total (pedido → cliente)', total, true);
+
+            document.getElementById('ctl-cabecalho').innerHTML = '<th class="p-3">Pedido</th><th class="p-3">Seller</th>' +
+                DATAS_CONTROLE.map(([, r]) => `<th class="p-3 whitespace-nowrap">${esc(r)}</th>`).join('') + '<th class="p-3 text-right">Total</th>';
+
+            const tbody = document.getElementById('tabela-controle');
+            if (!pedidos.length) {
+                tbody.innerHTML = '<tr><td colspan="11" class="p-4 text-center text-slate-400">Nenhum pedido neste mês.</td></tr>';
+                document.getElementById('ctl-rodape').textContent = '';
+                return;
+            }
+            // Mês atual em destaque: faixa azul à esquerda de cada linha
+            const destaque = ehMesAtual ? 'border-l-4 border-l-sky-500' : '';
+            tbody.innerHTML = pedidos.map((p, i) => {
+                const s = situacoes[i];
+                const selo = s === 'cancelado'
+                    ? '<span class="block mt-1 w-fit bg-slate-200 text-slate-600 text-[10px] px-2 py-0.5 rounded-full font-semibold">considerado cancelado</span>'
+                    : s === 'aguardando'
+                        ? '<span class="block mt-1 w-fit bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-semibold">aguardando NF</span>' : '';
+                const celulas = DATAS_CONTROLE.map(([campo], j) => {
+                    let etapa = '';
+                    if (j > 0) {
+                        const d = difDias(p[DATAS_CONTROLE[j - 1][0]], p[campo]);
+                        // Pedido → NF do seller acima de 1 dia fica em laranja
+                        const cor = d < 0 ? 'text-slate-300' : (j === 1 && d > DIAS_AGUARDANDO_NF ? 'text-amber-600 font-bold' : 'text-sky-700');
+                        etapa = d === null ? '' : `<span class="block text-[11px] ${cor}" ${d < 0 ? 'title="Datas fora de ordem"' : ''}>${d >= 0 ? '+' : ''}${numero(d)} d</span>`;
+                    }
+                    return `<td class="p-3 whitespace-nowrap">${formatarData(p[campo])}${etapa}</td>`;
+                }).join('');
+                const t = difDias(p.dt_pedido, p.entrega_cliente);
+                return `
+                    <tr class="${s === 'cancelado' ? 'bg-slate-50 text-slate-400' : 'hover:bg-slate-50'} ${destaque}">
+                        <td class="p-3 font-semibold text-slate-900">${txt(p.pedido_compra)}${selo}</td>
+                        <td class="p-3">${txt(p.seller)}</td>
+                        ${celulas}
+                        <td class="p-3 text-right font-bold text-[#003366]">${t !== null && t >= 0 ? `${numero(t)} d` : '—'}</td>
+                    </tr>`;
+            }).join('');
+            document.getElementById('ctl-rodape').textContent =
+                `${numero(pedidos.length)} pedidos${ehMesAtual ? ' do mês atual' : ''} · embaixo de cada data, os dias desde a etapa anterior`;
+        }
+
         // ---------- Extrair Relatório ----------
         let transportadorasCarregadas = false;
 
@@ -1637,7 +1875,7 @@
                 tbody.innerHTML = filtrados.length === 0
                     ? '<tr><td colspan="9" class="p-4 text-center text-slate-400">Nenhuma carga LATAM disponível no momento.</td></tr>'
                     : filtrados.map(item => `
-                        <tr class="${item.visto_cd_em ? 'hover:bg-slate-50' : 'bg-red-50/60 hover:bg-red-50'}">
+                        <tr class="${(item.status_cd || 'pendente') === 'pendente' ? 'bg-red-50/60 hover:bg-red-50' : 'hover:bg-slate-50'}">
                             <td class="p-3 font-medium text-slate-900">${txt(item.seller)}</td>
                             <td class="p-3">${notasColeta(item)}</td>
                             <td class="p-3 font-mono">${txt(daPlanilha(item, 'cte', 'cte'))}</td>

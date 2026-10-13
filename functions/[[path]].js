@@ -84,7 +84,12 @@ export async function onRequest(context) {
     if (path === '/api/entregas' && request.method === 'GET') return await listarEntregas(env, url.searchParams);
     if (path === '/api/entregas/filtros' && request.method === 'GET') return await filtrosEntregas(env);
     if (path === '/api/indicadores' && request.method === 'GET') return await indicadores(env, url.searchParams);
-    if (path === '/api/indicadores/leadtime' && request.method === 'GET') return await leadTimeSemanal(env, url.searchParams);    if (path === '/api/relatorio' && request.method === 'GET') return await relatorio(env, url.searchParams);
+    if (path === '/api/indicadores/leadtime' && request.method === 'GET') return await leadTimeSemanal(env, url.searchParams);
+    if (path === '/api/controle-pedidos' && request.method === 'GET') {
+      if (!['admin', 'comercial'].includes(usuario.perfil)) return erro(403, 'Apenas administrador e comercial');
+      return await controlePedidos(env, url.searchParams);
+    }
+    if (path === '/api/relatorio' && request.method === 'GET') return await relatorio(env, url.searchParams);
     if (path === '/api/relatorio/filtros' && request.method === 'GET') return filtrosRelatorio();
     if (path === '/api/tracking' && request.method === 'GET') return await listarTracking(env, url.searchParams);
     if (path === '/api/sync-status' && request.method === 'GET') return await statusSync(env);
@@ -212,7 +217,8 @@ function deBase64Url(texto) {
 
 // Consultas: últimos 100. CD: todas as coletas LATAM liberadas (novas primeiro, recebidas por último).
 // Admin: todas as LATAM, bloqueadas primeiro. A tabela é pequena; o LIMIT é só uma proteção (regra 12).
-const ORDEM_CD = `CASE WHEN visto_cd_em IS NULL THEN 0 WHEN status_cd = 'recebido' THEN 3 WHEN status_cd = 'coletado' THEN 2 ELSE 1 END`;
+// Aguardando coleta primeiro (as nunca vistas antes), depois coletadas e recebidas no CD
+const ORDEM_CD = `CASE WHEN status_cd = 'recebido' THEN 3 WHEN status_cd = 'coletado' THEN 2 WHEN visto_cd_em IS NULL THEN 0 ELSE 1 END`;
 const SQL_AGENDAMENTOS = {
   // Card "Coletas LATAM": a tela mostra as 3 últimas e o resto só com filtro de período ou busca (13/10)
   '': 'SELECT * FROM agendamentos ORDER BY id DESC LIMIT 1000',
@@ -412,7 +418,9 @@ const SQL_LATAM_LIBERADAS = `UPPER(transportadora) = 'LATAM' AND liberado_latam 
 // Aviso de coleta nova: quantas coletas liberadas o CD ainda não viu (contador no menu; tabela pequena)
 async function contarNovas(env) {
   const r = await env.DB.prepare(
-    `SELECT COUNT(*) AS novas FROM agendamentos WHERE ${SQL_LATAM_LIBERADAS} AND visto_cd_em IS NULL`
+    // Pedido da Emilly (13/10): o aviso vale enquanto a coleta está disponível (aguardando coleta); some quando o
+    // CD confirma a coleta ou o recebimento, e não mais quando o CD só abre a aba
+    `SELECT COUNT(*) AS novas FROM agendamentos WHERE ${SQL_LATAM_LIBERADAS} AND COALESCE(status_cd, 'pendente') = 'pendente'`
   ).first();
   return Response.json({ novas: r?.novas || 0 });
 }
@@ -936,6 +944,47 @@ async function leadTimeSemanal(env, p) {
   };
   if (cacheLeadTime.size > 50) cacheLeadTime.clear();
   cacheLeadTime.set(chave, { em: Date.now(), dados });
+  return Response.json(dados);
+}
+
+// Controle de Pedidos (pedido da Emilly, 13/10; só admin e comercial): um pedido de compra por linha com as 8 datas
+// (pedido, NF do seller, coleta, CT-e, embarque, Entrega CD, faturamento, entrega ao cliente) do mês escolhido.
+// A tela calcula os dias de cada etapa, as médias e quem está aguardando NF ou é considerado cancelado.
+// "aguardando": pedidos de 2 a 7 dias atrás (fora do mês escolhido também), para o aviso de NF do seller atrasada.
+// Lê só as linhas do mês pelo índice de data (regra 12); cache de 30 min por mês + seller.
+const COLUNAS_CONTROLE = `pedido_compra, MAX(n_fornecedor) AS seller, MAX(dt_pedido) AS dt_pedido,
+  MAX(NULLIF(nota_fiscal_explode, '')) AS nf_seller, MAX(transportadora) AS transportadora,
+  MAX(emissao) AS data_nf, MAX(data_coleta) AS data_coleta, MAX(emissao_cte) AS data_cte,
+  MAX(data_embarque) AS data_embarque, MAX(data_entrega) AS entrega_cd, MAX(dt_faturamento) AS faturamento,
+  MAX(dt_entrega) AS entrega_cliente`;
+const cacheControle = new Map();
+
+async function controlePedidos(env, p) {
+  if (await tabelaPedidos(env) !== 'base_geral') return erro(503, 'O controle volta quando a base geral terminar a primeira carga.');
+  const hoje = new Date(Date.now() - 4 * 3600000).toISOString().slice(0, 10); // dia de hoje em Manaus
+  const mes = p.get('mes') || hoje.slice(0, 7);
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(mes)) return erro(400, 'Mês inválido');
+  const seller = p.get('seller') || '';
+  // so=aviso: só os recentes (contador do menu ao entrar no portal, sem ler o mês inteiro)
+  const soAviso = p.get('so') === 'aviso';
+
+  const chave = JSON.stringify([hoje, mes, seller, soAviso]);
+  const guardado = cacheControle.get(chave);
+  if (guardado && Date.now() - guardado.em < CACHE_FILTROS_MS) return Response.json(guardado.dados);
+
+  const diasAtras = n => new Date(Date.parse(`${hoje}T00:00:00Z`) - n * 86400000).toISOString().slice(0, 10);
+  const consulta = (de, ate) => env.DB.prepare(
+    `SELECT ${COLUNAS_CONTROLE} FROM base_geral
+     WHERE dt_pedido BETWEEN ? AND ? AND pedido_compra IS NOT NULL ${seller ? 'AND n_fornecedor = ?' : ''}
+     GROUP BY pedido_compra ORDER BY dt_pedido DESC, pedido_compra DESC LIMIT 5000`
+  ).bind(de, ate, ...(seller ? [seller] : []));
+  const consultas = [consulta(diasAtras(7), diasAtras(2))];
+  if (!soAviso) consultas.push(consulta(`${mes}-01`, `${mes}-31`));
+  const [recentes, doMes] = await env.DB.batch(consultas);
+
+  const dados = { mes, seller, hoje, pedidos: doMes?.results || [], recentes: recentes.results || [] };
+  if (cacheControle.size > 50) cacheControle.clear();
+  cacheControle.set(chave, { em: Date.now(), dados });
   return Response.json(dados);
 }
 

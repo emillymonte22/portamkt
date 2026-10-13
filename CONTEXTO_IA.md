@@ -60,7 +60,7 @@ Login com usuário e senha (tabela `usuarios`). Três perfis:
 
 | Perfil | Vê | Pode |
 |---|---|---|
-| `comercial` | Consultas, Indicadores, Relatórios | Só consultar |
+| `comercial` | Consultas, Indicadores, Relatórios, Controle de Pedidos | Só consultar |
 | `cd` | Consultas (só "Pedidos Marketplace", **sem** o cartão "Coletas LATAM", antes "Inclusão de Coletas (LATAM)"), Indicadores, Relatórios + "Disponível para Coleta (LATAM)" | Só consultar |
 | `admin` | Tudo + "Painel Admin (Sinalização)" | **Incluir coletas LATAM** e liberar/bloquear cargas para o CD |
 
@@ -85,8 +85,8 @@ Login com usuário e senha (tabela `usuarios`). Três perfis:
 | `GET /api/agendamentos?escopo=admin` | admin | todas as coletas LATAM, bloqueadas primeiro (Painel Admin; recarrega ao abrir a aba). Antes de listar, cria como coleta **bloqueada** cada CT-e novo da LATAM (`ctes_latam`, últimos 7 dias, que ainda não está no portal nem está ENTREGUE na planilha; `origem = 'cte'`, no máximo a cada 5 min). Nas 3 listas de coletas, cada item traz `planilha` (achada pelo Nº da coleta, pelo CT-e ou por NF **do mesmo seller**) e `cte_latam` (NFs e emissão do CT-e, que valem sobre as da planilha) |
 | `POST /api/agendamentos` `{seller, transportadora, nota_fiscal, cte, data_coleta, data_cte, entrega_cd, status_etapa}` | admin | inclui coleta LATAM. `nota_fiscal` aceita várias NFs separadas por `/`. **Nasce bloqueada** (`liberado_latam = 0`) |
 | `PATCH /api/agendamentos/:id/latam` `{liberado_latam: true/false}` | admin | libera (avisa o CD: grava `liberado_em` e zera `visto_cd_em`, a coleta volta a ser NOVA) ou bloqueia a coleta |
-| `GET /api/agendamentos/novas` | cd, admin | `{novas}`: liberadas que o CD ainda não viu (contador no menu; a tela consulta ao entrar e a cada 5 min) |
-| `POST /api/agendamentos/visto` | cd | o CD abriu a aba: marca as liberadas como vistas (admin recebe `marcadas: 0`, não apaga o aviso do CD) |
+| `GET /api/agendamentos/novas` | cd, admin | `{novas}`: liberadas ainda **aguardando coleta** (`status_cd` pendente). Desde 13/10 o contador vermelho do menu some quando o CD confirma a coleta ou o recebimento, não ao abrir a aba (a tela consulta ao entrar, a cada 5 min e depois de cada confirmação) |
+| `POST /api/agendamentos/visto` | cd | o CD abriu a aba: marca as liberadas como vistas (tira só o selo NOVA; admin recebe `marcadas: 0`) |
 | `PATCH /api/agendamentos/:id/cd` `{acao: coletado/recebido/desfazer}` | cd, admin | confirmação no CD: pendente → coletado → recebido (grava data/hora e `confirmado_por`); `desfazer` volta um passo |
 | `GET /api/agendamentos/sugestao?nf=a/b` | admin | preenche a inclusão pela base geral: `{total, encontradas, seller, transportadora, cte, data_coleta, data_cte, entrega_cd, ncoleta, status_planilha}` (pela NF do seller; se nada, pela NF de 9 posições) |
 | `GET /api/agendamentos/planilha` | admin | coletas LATAM da planilha com status TRANSITO/PROGRAMADO/AGENDADO/SEFAZ que ainda não estão no portal (lê a base geral; cache 5 min) |
@@ -97,6 +97,7 @@ Login com usuário e senha (tabela `usuarios`). Três perfis:
 | `GET /api/entregas/filtros` | logado | `{sellers: [...], transportadoras: [...]}` para preencher os selects (cache 30 min) |
 | `GET /api/indicadores?seller=&de=&ate=` | logado | `{de, ate, seller, grupos}`: um grupo por seller × mês (`mes` = `AAAA-MM`) com `pedidos`, `no_prazo`, `fora_prazo`, `sem_entrega` e somas/quantidades de dias (`soma_pcd/n_pcd` pedido→Entrega CD — antes de 08/10 era pedido→faturamento CD, `soma_ent/n_ent` pedido→entrega cliente, `soma_cd/n_cd` coleta→entrega CD). Sem data, ano corrente. Cada `pedido` conta uma vez. Uma consulta por filtro, em cache por 30 min; a tela soma os grupos |
 | `GET /api/indicadores/leadtime?seller=&uf=&de=&ate=` | logado | `{inicio, fim, semanas, linhas}`: uma linha por semana (segunda a domingo, `semana` = data da segunda) da data do pedido, nas até 6 semanas que terminam na semana de `ate` (padrão hoje) e não começam antes da semana de `de`; só conta pedidos entre `de` e `ate`. A tela manda o seller e o período do **filtro geral da aba** (pedido da Emilly: o filtro vale para tudo nos indicadores); a UF é só do card. Médias de dias por etapa (`pedido_nf`, `nf_cte`, `cte_embarque`, `embarque_cd`, `cd_faturamento`, `faturamento_cliente`, `total` = pedido→entrega cliente) com `n_<etapa>` = pedidos na média. Também `ufs`: só as UFs com pedidos nessas semanas (do seller, se escolhido), para o filtro de UF. Cache 30 min |
+| `GET /api/controle-pedidos?mes=AAAA-MM&seller=&so=` | admin, comercial | `{mes, seller, hoje, pedidos, recentes}`: aba **Controle de Pedidos**. `pedidos` = um por `pedido_compra` do mês (padrão: mês atual) com as 8 datas (`dt_pedido`, `data_nf`, `data_coleta`, `data_cte`, `data_embarque`, `entrega_cd`, `faturamento`, `entrega_cliente`) + `nf_seller`, `transportadora`; `recentes` = pedidos de 2 a 7 dias atrás (aviso de NF do seller atrasada). `so=aviso` traz só `recentes` (contador do menu). A tela calcula dias por etapa, médias, "aguardando NF" e "considerado cancelado". Lê só o mês pelo índice de data; cache 30 min |
 | `GET /api/relatorio?de=&ate=&seller=&transportadora=&apos_id=` | logado | `{itens, proximo}`: partes de 1.000 linhas de `base_geral` (todas as colunas; `transportador` e `cte` = só os da regra que vale para o seller da linha). **Só as combinações de `REGRAS_RELATORIO`** (procuradas em `base_geral.transportes`): GRU - KM CARGO só Brascol, LLS só Vitrola e Tramontina, LATAM (vem da planilha). Responde 503 até a 1ª carga da base geral. `transportadora` = `GRU`, `LLS`, `LATAM` ou vazio (todas as regras). Cursor = `rowid` (`_id`); peça a próxima parte com `apos_id=proximo` até vir `null`. Sem data, ano corrente |
 | `GET /api/relatorio/filtros` | logado | `{transportadoras: [{valor, rotulo}]}` = `REGRAS_RELATORIO` (não lê o banco) |
 | `GET /api/tracking?nf=` | logado | itens da NF na tabela de tracking aéreo |
@@ -309,4 +310,18 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
     período (data da coleta; sem ela, o dia da inclusão) e pesquisa (NF, CT-e ou seller). Sem filtro, só as 3 últimas
     coletas aparecem; o resto só com pesquisa. A API passou de 100 para 1.000 coletas nessa lista (tabela pequena), para a
     pesquisa achar as antigas. Filtro feito na tela, sem consulta nova ao banco.
+33. **Aba Controle de Pedidos (13/10):** a pedido dela, só para admin e comercial (a API confere). Um pedido de compra por
+    linha com as 8 datas (pedido, NF do seller, coleta, CT-e, embarque, Entrega CD, faturamento, entrega ao cliente) e,
+    embaixo de cada data, os dias desde a etapa anterior ("+1 d"); cartões com a média de cada etapa e o total (pedido →
+    cliente); filtro de mês (padrão: mês atual, com faixa azul nas linhas) e de seller. Regras (decisão dela): pedido sem
+    NF do seller há **mais de 1 dia** = "aguardando NF" (card de aviso com os pedidos de 2 a 7 dias atrás, contador
+    laranja no menu, Pedido → NF acima de 1 dia em laranja); sem NF e **sem nenhuma data há mais de 7 dias** =
+    "considerado cancelado" (contado no mês e fora das médias). Sem tabela nova: lê a `base_geral` (o pedido falava em
+    "outra base", mas as datas já estão todas nela e uma tabela nova gastaria gravações do Job). Testado num portal
+    local com pedidos de exemplo (completo, aguardando, cancelado, de ontem, NF demorada, outro mês, linha repetida).
+    Os pedidos sem NF de antes do mês retrasado já saem pelo Job (item 32), então cancelados aparecem só nos meses recentes.
+34. **Aviso vermelho do CD pela situação da coleta (13/10):** a pedido dela, o contador vermelho do menu "Disponível para
+    Coleta", o fundo vermelho da linha e o selo NOVA valem enquanto a coleta está **aguardando coleta**; somem quando o
+    CD confirma a coleta ou o recebimento (antes sumiam quando o CD só abria a aba). "Desfazer" volta o aviso. Testado
+    no portal local (1 → confirmar coleta 0 → desfazer 1; abrir a aba mantém 1).
 16. **Migrações 002, 003 e 004 aplicadas no banco real (07/10, ~10h).** A tabela `agendamentos` estava vazia, então a 003 não perdeu dados. Até então a inclusão de coleta LATAM dava erro (faltavam `cte`, `data_cte`, `entrega_cd`).
