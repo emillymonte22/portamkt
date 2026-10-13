@@ -186,6 +186,7 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 - Detalhe do tracking por NF (`/api/tracking`) já existe na API, mas ainda não tem tela.
 - O formulário "Nova Coleta LATAM" tem lista fixa de sellers no HTML.
 - Limitar tentativas de login (regra de rate limiting no Cloudflare).
+- E-mail de cobrança por seller com envio automático (hoje abre no Outlook e a pessoa envia): precisa da permissão `Mail.Send` (Microsoft Graph) liberada pela TI e de uma tabela com o e-mail de cada seller.
 - Trocar o dono do Job por um usuário de serviço (service principal) em vez de uma pessoa.
 - Futuro: possível migração para a workstation NVIDIA do setor (via Cloudflare Tunnel ou só na rede interna).
 - Ideias para facilitar as alterações: separar o JavaScript de `public/index.html` em `public/app.js` (arquivo menor, a IA não corta); checagem automática no GitHub (GitHub Actions) para barrar arquivo cortado, coluna inexistente e remoção de `esc()`; trabalhar em branch com link de preview do Cloudflare antes de juntar na `main`.
@@ -329,7 +330,12 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
     colar no Outlook; "Abrir no programa de e-mail" usa `mailto:` (só texto, escondido se a lista passar de ~1.800
     caracteres). "Sem faturamento" = sem NF do seller (mesma regra do aviso). Testado no portal local. Depois ela pediu
     que o e-mail use **sempre os pedidos dos últimos 7 dias** (depois disso, sem nenhum dado, o pedido já conta como
-    cancelado); por isso o limite de dias vai de 1 a 6.
+    cancelado); por isso o limite de dias vai de 1 a 6. Em seguida pediu que o card fique **por último** na aba e que
+    o e-mail vá "direto pro Outlook": o botão **Abrir no Outlook** abre uma mensagem nova no Outlook na web
+    (`outlook.office.com/mail/deeplink/compose`, conta Bemol) com assunto e texto, e no mesmo clique copia o e-mail com
+    a tabela formatada (Ctrl+V); "Abrir no Outlook do computador" usa `mailto:`. Ela ainda põe o destinatário e clica em
+    Enviar. **Envio automático** (sem abrir o Outlook) exigiria a permissão `Mail.Send` da Microsoft Graph para o portal,
+    liberada pela TI, e o e-mail dos sellers no banco — fica como pendência.
 36. **Alerta "NF emitida e não coletada" (13/10):** a pedido dela, card laranja na aba Controle de Pedidos (e cartão de
     contagem, selo "NF sem coleta" na lista do mês e soma no contador do menu): pedidos com NF do seller há **mais de
     24h** e sem coleta nem nenhuma etapa seguinte. A base só tem a data (sem hora), então "24h" = NF de anteontem ou
