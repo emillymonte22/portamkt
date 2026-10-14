@@ -345,10 +345,33 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
     Coleta", o fundo vermelho da linha e o selo NOVA valem enquanto a coleta está **aguardando coleta**; somem quando o
     CD confirma a coleta ou o recebimento (antes sumiam quando o CD só abria a aba). "Desfazer" volta o aviso. Testado
     no portal local (1 → confirmar coleta 0 → desfazer 1; abrir a aba mantém 1).
-37. **Pedido concluído em verde (14/10):** a pedido dela, na lista do Controle de Pedidos o pedido com **as 8 datas
-    preenchidas** (pedido até entrega ao cliente) fica com a linha verde clara e o selo "concluído". Só na tela, sem
-    mudança na API. Ela também confirmou que o TOTAL do Lead Time semanal é a média pedido → entrega ao cliente (não a
-    soma das etapas), como já era. No mesmo dia, os cards "⚠ Pedidos sem NF do seller" e "🚚 NF emitida e não
-    coletada" ganharam **filtro de seller próprio** (na tela, sobre a lista já carregada; as opções são os sellers da
-    lista) e o card de NF sem coleta perdeu a coluna Transportadora.
+37. **Ajustes de 14/10 (Indicadores e Controle de Pedidos, pedidos da Emilly):**
+    - **TOTAL (Lead Time) do Lead Time semanal — só conferência, sem mudança:** ela perguntou se, em "Todos os sellers -
+      Geral", o TOTAL somava as etapas. **Não soma.** O TOTAL é uma etapa própria (`['total', 'dt_pedido', 'dt_entrega']`
+      em `ETAPAS_LEAD_TIME`, `functions/[[path]].js`): a média, por semana, dos dias entre a **data do pedido** e a
+      **entrega ao cliente**, só com os pedidos que têm as duas datas — exatamente o que ela queria ("média total da 1ª
+      etapa, data do pedido, até a entrega ao cliente"). Com "Todos os sellers" a conta é a mesma, com todos os sellers e
+      UFs. Por isso o TOTAL **não bate com a soma das linhas de cima**: cada etapa tem o seu grupo de pedidos (só os que
+      têm as duas datas dela) e o TOTAL só conta pedidos já entregues ao cliente; nas semanas recentes ele tem poucos
+      pedidos ou fica `—`. O tooltip de cada célula mostra "média de N pedidos". Se alguém pedir de novo "TOTAL = soma",
+      lembrar que a decisão (item 17) foi ponta a ponta porque `data_entrega` vem vazia em muitos pedidos.
+    - **Pedido concluído em verde:** na lista do mês do Controle de Pedidos, o pedido com **as 8 datas preenchidas**
+      (pedido, NF seller, coleta, CT-e, embarque, Entrega CD, faturamento, entrega ao cliente) fica com a linha **verde
+      clara** (`bg-emerald-50`) e o selo **"concluído"** embaixo do número do pedido. A regra é `concluido =
+      DATAS_CONTROLE.every(([c]) => p[c])` em `mostrarControle()` (`index.html`) e vale antes dos outros selos. O rodapé
+      da tabela explica: "em verde, os concluídos (todas as etapas)". Exemplo dela: 4509034397 (Vitrola, 07/10 → 12/10, 5 d).
+    - **Filtro de seller nos dois cards de aviso:** "⚠ Pedidos sem NF do seller há mais de 1 dia" (`ctl_aguardando_seller`)
+      e "🚚 NF emitida e não coletada há mais de 24h" (`ctl_sem_coleta_seller`) ganharam um select de seller cada, no
+      canto direito do card. O filtro é **feito na tela** sobre a lista já carregada (`avisosControle` +
+      `mostrarAvisosControle()` / `filtroSellerAviso()`), **sem consulta nova ao banco** (regra 12). As opções são só os
+      sellers que aparecem na lista daquele card; a escolha fica ao recarregar se o seller ainda estiver na lista. O
+      filtro de seller do topo da aba continua igual (ele restringe o que a API devolve; o do card filtra dentro disso).
+      O contador laranja do menu não muda com esses filtros.
+    - **Card "NF emitida e não coletada" sem a coluna Transportadora** (a pedido dela). A API continua mandando
+      `transportadora` em `sem_coleta`; só a tela deixou de mostrar.
+    - Só `public/index.html` mudou (sem API, sem banco). Publicado em 2 commits na `main` (777276a e 51e069c), os dois
+      com "Cloudflare Pages: success". Neste PC o `npx` não está no PATH: a publicação foi conferida pelo check-run do
+      commit no GitHub (`gh api repos/emillymonte22/portamkt/commits/<sha>/check-runs`). Testado só a sintaxe do JS
+      (`node --check` no script da página); a tela foi conferida pela Emilly ("deu certo").
+    - Job do Databricks de 14/10 às 12h30: **sucesso** (run 539809688788451).
 16. **Migrações 002, 003 e 004 aplicadas no banco real (07/10, ~10h).** A tabela `agendamentos` estava vazia, então a 003 não perdeu dados. Até então a inclusão de coleta LATAM dava erro (faltavam `cte`, `data_cte`, `entrega_cd`).
