@@ -1851,6 +1851,16 @@
                         const cor = d < 0 ? 'text-slate-300' : (j === 1 && d > DIAS_AGUARDANDO_NF ? 'text-amber-600 font-bold' : 'text-sky-700');
                         etapa = d === null ? '' : `<span class="block text-[11px] ${cor}" ${d < 0 ? 'title="Datas fora de ordem"' : ''}>${d >= 0 ? '+' : ''}${numero(d)} d</span>`;
                     }
+                    // Sem NF do seller (14/10): na coluna NF seller, os dias sem NF desde o pedido, corridos e úteis
+                    // (mesma conta do card "⚠ Pedidos sem NF"); em laranja quando passa de 1 dia (aguardando NF)
+                    if (j === 1 && !p[campo] && !ehCancelado(s)) {
+                        const corridos = difDias(p.dt_pedido, hoje);
+                        if (corridos !== null && corridos >= 0) {
+                            const cor = corridos > DIAS_AGUARDANDO_NF ? 'text-amber-600 font-bold' : 'text-slate-500';
+                            etapa = `<span class="block text-[11px] ${cor}" title="Dias desde o pedido sem NF do seller">sem NF há ${numero(corridos)} d</span>
+                                <span class="block text-[10px] text-slate-500">${numero(diasUteis(p.dt_pedido, hoje))} d úteis</span>`;
+                        }
+                    }
                     return `<td class="p-3 whitespace-nowrap">${formatarData(p[campo])}${etapa}</td>`;
                 }).join('');
                 const t = difDias(p.dt_pedido, p.entrega_cliente);

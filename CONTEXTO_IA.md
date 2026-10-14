@@ -400,4 +400,9 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
     **contém** o que foi digitado (aceita parte do número; ignora o que não é dígito), com "N pedido(s) encontrado(s)".
     Filtra na tela, sem consulta ao banco; vale dentro do mês e do seller do filtro geral (se não achar, a tela avisa
     para conferir o mês). A busca continua aplicada ao trocar de mês ou cancelar/desfazer um pedido.
+41. **Dias sem NF na coluna NF seller (14/10):** a pedido dela, na tabela de pedidos do Controle de Pedidos, o pedido
+    ainda sem NF do seller mostra embaixo do `—` da coluna NF SELLER "sem NF há X d" (dias corridos desde o pedido)
+    e "Y d úteis" — a mesma conta do card "⚠ Pedidos sem NF do seller" (`difDias` e `diasUteis`). Em laranja quando
+    passa de 1 dia (aguardando NF); cinza para pedidos de hoje e ontem. Não aparece em pedidos cancelados (pelo admin
+    ou "considerado cancelado").
 16. **Migrações 002, 003 e 004 aplicadas no banco real (07/10, ~10h).** A tabela `agendamentos` estava vazia, então a 003 não perdeu dados. Até então a inclusão de coleta LATAM dava erro (faltavam `cte`, `data_cte`, `entrega_cd`).
