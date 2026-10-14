@@ -348,5 +348,7 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
 37. **Pedido concluído em verde (14/10):** a pedido dela, na lista do Controle de Pedidos o pedido com **as 8 datas
     preenchidas** (pedido até entrega ao cliente) fica com a linha verde clara e o selo "concluído". Só na tela, sem
     mudança na API. Ela também confirmou que o TOTAL do Lead Time semanal é a média pedido → entrega ao cliente (não a
-    soma das etapas), como já era.
+    soma das etapas), como já era. No mesmo dia, os cards "⚠ Pedidos sem NF do seller" e "🚚 NF emitida e não
+    coletada" ganharam **filtro de seller próprio** (na tela, sobre a lista já carregada; as opções são os sellers da
+    lista) e o card de NF sem coleta perdeu a coluna Transportadora.
 16. **Migrações 002, 003 e 004 aplicadas no banco real (07/10, ~10h).** A tabela `agendamentos` estava vazia, então a 003 não perdeu dados. Até então a inclusão de coleta LATAM dava erro (faltavam `cte`, `data_cte`, `entrega_cd`).
