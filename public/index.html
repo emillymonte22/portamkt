@@ -1730,7 +1730,8 @@
                 ? '<tr><td colspan="5" class="p-4 text-center text-slate-400">Nenhum pedido aguardando NF do seller.</td></tr>'
                 : aguardando.map(p => `
                     <tr class="hover:bg-amber-50/60">
-                        <td class="p-3 font-semibold text-slate-900">${txt(p.pedido_compra)}</td>
+                        <td class="p-3 font-semibold text-slate-900">${txt(p.pedido_compra)}${currentUser.perfil === 'admin'
+                            ? `<button type="button" onclick="cancelarPedidoControle('${esc(p.pedido_compra)}', true)" class="block mt-1 text-[10px] font-semibold text-red-600 hover:underline">Marcar como cancelado</button>` : ''}</td>
                         <td class="p-3">${txt(p.seller)}</td>
                         <td class="p-3">${formatarData(p.dt_pedido)}</td>
                         <td class="p-3 text-right font-bold text-amber-600">${numero(difDias(p.dt_pedido, hoje))}</td>

@@ -386,5 +386,8 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
     7 dias, que continuam com o selo cinza "considerado cancelado"). Tabela nova `pedidos_cancelados` (migração 011),
     lida a cada consulta fora do cache de 30 min para o cancelamento valer na hora. Testado num portal local:
     comercial 403, pedido inválido 400, admin marca → aparece `cancelado_por`/`cancelado_em` para admin e comercial,
-    sai de `sem_coleta`; desfazer volta ao normal.
+    sai de `sem_coleta`; desfazer volta ao normal. Depois ela pediu o botão também no card **"⚠ Pedidos sem NF do
+    seller há mais de 1 dia"** (que mostra pedidos de 2 a 7 dias atrás, às vezes de outro mês que o da lista): o admin
+    marca direto ali e o pedido sai do card na hora. Para desfazer, escolher o mês do pedido na lista e clicar em
+    "Desfazer cancelamento".
 16. **Migrações 002, 003 e 004 aplicadas no banco real (07/10, ~10h).** A tabela `agendamentos` estava vazia, então a 003 não perdeu dados. Até então a inclusão de coleta LATAM dava erro (faltavam `cte`, `data_cte`, `entrega_cd`).
