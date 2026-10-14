@@ -526,35 +526,8 @@
                         </div>
                     </div>
 
-                    <!-- Aviso: NF do seller atrasada -->
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-amber-200">
-                        <div class="flex flex-wrap justify-between items-start gap-3 mb-4">
-                            <div>
-                                <h3 class="text-base font-bold text-amber-700">⚠ Pedidos sem NF do seller há mais de 1 dia</h3>
-                                <p class="text-xs text-slate-500">Pedidos de 2 a 7 dias atrás que o seller ainda não faturou (vale o seller do filtro, não o mês)</p>
-                            </div>
-                            <div>
-                                <label class="block text-xs font-semibold text-slate-600 mb-1">Seller</label>
-                                <select id="ctl_aguardando_seller" onchange="mostrarAvisosControle()" class="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
-                                    <option value="">Todos</option>
-                                </select>
-                            </div>
-                        </div>
-                        <div class="overflow-x-auto">
-                            <table class="w-full text-left text-sm text-slate-600">
-                                <thead class="bg-amber-50 text-slate-700 uppercase text-xs">
-                                    <tr>
-                                        <th class="p-3">Pedido</th>
-                                        <th class="p-3">Seller</th>
-                                        <th class="p-3 whitespace-nowrap">Data do pedido</th>
-                                        <th class="p-3 text-right whitespace-nowrap">Dias sem NF<span class="block text-[10px] font-normal normal-case text-slate-500">corridos</span></th>
-                                        <th class="p-3 text-right whitespace-nowrap">Dias sem NF<span class="block text-[10px] font-normal normal-case text-slate-500">úteis (sem fim de semana e feriados)</span></th>
-                                    </tr>
-                                </thead>
-                                <tbody id="tabela-ctl-aguardando" class="divide-y divide-slate-200"></tbody>
-                            </table>
-                        </div>
-                    </div>
+                    <!-- O card "⚠ Pedidos sem NF do seller há mais de 1 dia" saiu em 14/10 (pedido da Emilly): os dias sem NF
+                         aparecem na coluna NF seller da tabela de pedidos; o contador "Aguardando NF" e o do menu continuam -->
 
                     <!-- Aviso: NF emitida e não coletada -->
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-orange-200">
@@ -1717,7 +1690,7 @@
             mostrarControle(dados, aguardando);
         }
 
-        // Cards de aviso (aguardando NF e NF sem coleta): cada um tem o próprio filtro de seller (14/10), feito na tela
+        // Card de aviso "NF sem coleta" (o de aguardando NF saiu em 14/10): filtro de seller próprio, feito na tela
         // sobre a lista já carregada. As opções são os sellers que aparecem na lista.
         let avisosControle = { aguardando: [], semColeta: [], hoje: '' };
         function filtroSellerAviso(id, lista) {
@@ -1741,19 +1714,6 @@
                         <td class="p-3">${formatarData(p.data_nf)}</td>
                         <td class="p-3 text-right font-bold text-orange-600">${numero(difDias(p.data_nf, hoje))}</td>
                         <td class="p-3 text-right font-bold text-orange-700">${numero(diasUteis(p.data_nf, hoje))}</td>
-                    </tr>`).join('');
-
-            const aguardando = filtroSellerAviso('ctl_aguardando_seller', avisosControle.aguardando);
-            document.getElementById('tabela-ctl-aguardando').innerHTML = aguardando.length === 0
-                ? '<tr><td colspan="5" class="p-4 text-center text-slate-400">Nenhum pedido aguardando NF do seller.</td></tr>'
-                : aguardando.map(p => `
-                    <tr class="hover:bg-amber-50/60">
-                        <td class="p-3 font-semibold text-slate-900">${txt(p.pedido_compra)}${currentUser.perfil === 'admin'
-                            ? `<button type="button" onclick="cancelarPedidoControle('${esc(p.pedido_compra)}', true)" class="block mt-1 text-[10px] font-semibold text-red-600 hover:underline">Marcar como cancelado</button>` : ''}</td>
-                        <td class="p-3">${txt(p.seller)}</td>
-                        <td class="p-3">${formatarData(p.dt_pedido)}</td>
-                        <td class="p-3 text-right font-bold text-amber-600">${numero(difDias(p.dt_pedido, hoje))}</td>
-                        <td class="p-3 text-right font-bold text-amber-700">${numero(diasUteis(p.dt_pedido, hoje))}</td>
                     </tr>`).join('');
         }
 

@@ -409,4 +409,10 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
     de Pedidos (item 37) passou a valer **sempre que o Total estiver preenchido** (data do pedido e entrega ao
     cliente, diferença não negativa), mesmo faltando datas intermediárias. Antes exigia as 8 datas. Cancelado pelo
     admin nunca fica verde.
+43. **Card "⚠ Pedidos sem NF do seller há mais de 1 dia" removido (14/10):** a pedido dela, depois que os dias sem NF
+    (corridos e úteis) passaram para a coluna NF SELLER da tabela (item 41), o card saiu da tela, junto com o filtro de
+    seller e o botão de cancelar que ele tinha (o botão continua na tabela). Continuam: o cartão "Aguardando NF do
+    seller (+1 dia)", o contador laranja do menu (a API ainda manda `recentes`) e o card "🚚 NF emitida e não coletada".
+    Atenção: a tabela mostra só o mês escolhido; no começo do mês, pedidos de 2 a 7 dias atrás do mês anterior ficam
+    no cartão/contador, mas para vê-los é preciso escolher o mês anterior.
 16. **Migrações 002, 003 e 004 aplicadas no banco real (07/10, ~10h).** A tabela `agendamentos` estava vazia, então a 003 não perdeu dados. Até então a inclusão de coleta LATAM dava erro (faltavam `cte`, `data_cte`, `entrega_cd`).
