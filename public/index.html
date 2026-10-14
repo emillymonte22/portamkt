@@ -589,8 +589,18 @@
 
                     <!-- Média de cada etapa no mês -->
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
-                        <h3 class="text-base font-bold text-slate-800">Média de dias por etapa</h3>
-                        <p class="text-xs text-slate-500 mb-4">Só os pedidos com as duas datas da etapa (datas fora de ordem ficam de fora)</p>
+                        <div class="flex flex-wrap justify-between items-start gap-3 mb-4">
+                            <div>
+                                <h3 class="text-base font-bold text-slate-800">Média de dias por etapa</h3>
+                                <p class="text-xs text-slate-500">Só os pedidos com as duas datas da etapa (datas fora de ordem ficam de fora)</p>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Seller</label>
+                                <select id="ctl_medias_seller" onchange="mostrarMediasControle()" class="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                                    <option value="">Todos</option>
+                                </select>
+                            </div>
+                        </div>
                         <div id="ctl-medias" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3"></div>
                     </div>
 
@@ -1739,6 +1749,28 @@
                     </tr>`).join('');
         }
 
+        // Média de dias de uma etapa (só pedidos com as duas datas e diferença não negativa)
+        function mediaDias(lista, de, ate) {
+            const vals = lista.map(p => difDias(p[de], p[ate])).filter(v => v !== null && v >= 0);
+            return { media: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null, n: vals.length };
+        }
+
+        // Card "Média de dias por etapa" com filtro de seller próprio (14/10), na tela, sobre os pedidos do mês
+        // (sem os cancelados). As opções são os sellers que têm pedidos no mês.
+        let pedidosMediasControle = [];
+        function mostrarMediasControle() {
+            const lista = filtroSellerAviso('ctl_medias_seller', pedidosMediasControle);
+            const cartao = (rotulo, r, destaque) => `
+                <div class="p-3 rounded-xl border ${destaque ? 'bg-sky-50 border-sky-200' : 'bg-slate-50 border-slate-200'}">
+                    <p class="text-[11px] font-semibold text-slate-500 leading-tight">${esc(rotulo)}</p>
+                    <p class="text-xl font-bold text-[#003366] mt-1">${umaCasa(r.media)}</p>
+                    <p class="text-[10px] text-slate-400">${r.n ? `dias · ${numero(r.n)} ped.` : 'sem pedidos com as duas datas'}</p>
+                </div>`;
+            document.getElementById('ctl-medias').innerHTML =
+                ETAPAS_CONTROLE.map(e => cartao(e.rotulo, mediaDias(lista, e.de, e.ate))).join('') +
+                cartao('Total (pedido → cliente)', mediaDias(lista, 'dt_pedido', 'entrega_cliente'), true);
+        }
+
         // Admin marca ou desfaz "pedido cancelado" (14/10). Cancelado sai das médias, dos avisos e do e-mail de cobrança.
         async function cancelarPedidoControle(pedido, cancelado) {
             if (cancelado && !confirm(`Marcar o pedido ${pedido} como cancelado?\n\nEle sai das médias, dos avisos e do e-mail de cobrança. Dá para desfazer depois.`)) return;
@@ -1760,11 +1792,7 @@
             const situacoes = pedidos.map(p => situacaoPedido(p, hoje));
             const ehCancelado = s => s === 'cancelado' || s === 'cancelado_admin';
             const validos = pedidos.filter((_, i) => !ehCancelado(situacoes[i]));
-            const media = (de, ate) => {
-                const vals = validos.map(p => difDias(p[de], p[ate])).filter(v => v !== null && v >= 0);
-                return { media: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null, n: vals.length };
-            };
-            const total = media('dt_pedido', 'entrega_cliente');
+            const total = mediaDias(validos, 'dt_pedido', 'entrega_cliente');
 
             document.getElementById('ctl-total').textContent = numero(pedidos.length);
             document.getElementById('ctl-leadtime').textContent = total.media === null ? '—' : `${umaCasa(total.media)} dias`;
@@ -1774,15 +1802,8 @@
 
             avisosControle = { aguardando, semColeta: dados.sem_coleta, hoje };
             mostrarAvisosControle();
-
-            const cartao = (rotulo, r, destaque) => `
-                <div class="p-3 rounded-xl border ${destaque ? 'bg-sky-50 border-sky-200' : 'bg-slate-50 border-slate-200'}">
-                    <p class="text-[11px] font-semibold text-slate-500 leading-tight">${esc(rotulo)}</p>
-                    <p class="text-xl font-bold text-[#003366] mt-1">${umaCasa(r.media)}</p>
-                    <p class="text-[10px] text-slate-400">${r.n ? `dias · ${numero(r.n)} ped.` : 'sem pedidos com as duas datas'}</p>
-                </div>`;
-            document.getElementById('ctl-medias').innerHTML =
-                ETAPAS_CONTROLE.map(e => cartao(e.rotulo, media(e.de, e.ate))).join('') + cartao('Total (pedido → cliente)', total, true);
+            pedidosMediasControle = validos;
+            mostrarMediasControle();
 
             document.getElementById('ctl-cabecalho').innerHTML = '<th class="p-3">Pedido</th><th class="p-3">Seller</th>' +
                 DATAS_CONTROLE.map(([, r]) => `<th class="p-3 whitespace-nowrap">${esc(r)}</th>`).join('') + '<th class="p-3 text-right">Total</th>';

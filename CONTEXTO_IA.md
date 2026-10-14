@@ -390,4 +390,9 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
     seller há mais de 1 dia"** (que mostra pedidos de 2 a 7 dias atrás, às vezes de outro mês que o da lista): o admin
     marca direto ali e o pedido sai do card na hora. Para desfazer, escolher o mês do pedido na lista e clicar em
     "Desfazer cancelamento".
+39. **Filtro de seller em "Média de dias por etapa" (14/10):** a pedido dela, o card do Controle de Pedidos ganhou um
+    select de seller próprio (`ctl_medias_seller`), igual aos dos cards de aviso: filtra na tela os pedidos do mês já
+    carregados (sem os cancelados), sem consulta nova ao banco; as opções são os sellers com pedidos no mês. Recalcula
+    as 7 etapas e o Total (`mostrarMediasControle()` / `mediaDias()` em `index.html`). O cartão "Lead time médio" do
+    topo continua com todos os sellers do filtro geral da aba.
 16. **Migrações 002, 003 e 004 aplicadas no banco real (07/10, ~10h).** A tabela `agendamentos` estava vazia, então a 003 não perdeu dados. Até então a inclusão de coleta LATAM dava erro (faltavam `cte`, `data_cte`, `entrega_cd`).
