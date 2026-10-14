@@ -606,6 +606,14 @@
 
                     <!-- Pedidos -->
                     <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                        <!-- Busca por número do pedido (14/10): filtra na tela as linhas do mês carregado -->
+                        <div class="flex flex-wrap items-end gap-3 mb-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-600 mb-1">Número do pedido</label>
+                                <input type="search" id="ctl_busca" oninput="filtrarPedidosControle()" inputmode="numeric" placeholder="Ex.: 4509047300" class="w-56 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-sky-600">
+                            </div>
+                            <p id="ctl-busca-info" class="text-xs text-slate-500 pb-2"></p>
+                        </div>
                         <div class="overflow-x-auto">
                             <table class="w-full text-left text-sm text-slate-600">
                                 <thead class="bg-slate-50 text-slate-700 uppercase text-xs">
@@ -1847,7 +1855,7 @@
                 }).join('');
                 const t = difDias(p.dt_pedido, p.entrega_cliente);
                 return `
-                    <tr class="${concluido ? 'bg-emerald-50 hover:bg-emerald-100/70' : ehCancelado(s) ? 'bg-slate-50 text-slate-400' : 'hover:bg-slate-50'} ${destaque}">
+                    <tr data-pedido="${esc(p.pedido_compra)}" class="${concluido ? 'bg-emerald-50 hover:bg-emerald-100/70' : ehCancelado(s) ? 'bg-slate-50 text-slate-400' : 'hover:bg-slate-50'} ${destaque}">
                         <td class="p-3 font-semibold text-slate-900">${txt(p.pedido_compra)}${selo}${botaoCancelar}</td>
                         <td class="p-3">${txt(p.seller)}</td>
                         ${celulas}
@@ -1856,6 +1864,22 @@
             }).join('');
             document.getElementById('ctl-rodape').textContent =
                 `${numero(pedidos.length)} pedidos${ehMesAtual ? ' do mês atual' : ''} · embaixo de cada data, os dias desde a etapa anterior · em verde, os concluídos (todas as etapas)`;
+            filtrarPedidosControle();
+        }
+
+        // Busca pelo número do pedido (14/10): mostra só as linhas do mês carregado cujo número contém o que foi digitado
+        function filtrarPedidosControle() {
+            const busca = document.getElementById('ctl_busca').value.replace(/\D/g, '');
+            const linhas = [...document.querySelectorAll('#tabela-controle tr[data-pedido]')];
+            let achados = 0;
+            for (const tr of linhas) {
+                const mostra = !busca || tr.dataset.pedido.includes(busca);
+                tr.classList.toggle('hidden', !mostra);
+                if (mostra) achados++;
+            }
+            document.getElementById('ctl-busca-info').textContent = !busca || !linhas.length ? ''
+                : achados ? `${numero(achados)} pedido(s) encontrado(s) neste mês`
+                    : 'Nenhum pedido com esse número neste mês. Confira o mês e o seller do filtro acima.';
         }
 
         // E-mail de cobrança (13/10): pedidos do seller sem NF há mais de N dias (corridos ou úteis). O portal só monta

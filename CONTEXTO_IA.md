@@ -395,4 +395,9 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
     carregados (sem os cancelados), sem consulta nova ao banco; as opções são os sellers com pedidos no mês. Recalcula
     as 7 etapas e o Total (`mostrarMediasControle()` / `mediaDias()` em `index.html`). O cartão "Lead time médio" do
     topo continua com todos os sellers do filtro geral da aba.
+40. **Busca por número do pedido no Controle de Pedidos (14/10):** a pedido dela, caixa "Número do pedido" em cima da
+    tabela de pedidos (`ctl_busca`, `filtrarPedidosControle()`): mostra só as linhas do mês carregado cujo número
+    **contém** o que foi digitado (aceita parte do número; ignora o que não é dígito), com "N pedido(s) encontrado(s)".
+    Filtra na tela, sem consulta ao banco; vale dentro do mês e do seller do filtro geral (se não achar, a tela avisa
+    para conferir o mês). A busca continua aplicada ao trocar de mês ou cancelar/desfazer um pedido.
 16. **Migrações 002, 003 e 004 aplicadas no banco real (07/10, ~10h).** A tabela `agendamentos` estava vazia, então a 003 não perdeu dados. Até então a inclusão de coleta LATAM dava erro (faltavam `cte`, `data_cte`, `entrega_cd`).
