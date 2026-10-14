@@ -405,4 +405,8 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
     e "Y d úteis" — a mesma conta do card "⚠ Pedidos sem NF do seller" (`difDias` e `diasUteis`). Em laranja quando
     passa de 1 dia (aguardando NF); cinza para pedidos de hoje e ontem. Não aparece em pedidos cancelados (pelo admin
     ou "considerado cancelado").
+42. **Verde de "concluído" pelo Total (14/10):** a pedido dela, a linha verde clara + selo "concluído" do Controle
+    de Pedidos (item 37) passou a valer **sempre que o Total estiver preenchido** (data do pedido e entrega ao
+    cliente, diferença não negativa), mesmo faltando datas intermediárias. Antes exigia as 8 datas. Cancelado pelo
+    admin nunca fica verde.
 16. **Migrações 002, 003 e 004 aplicadas no banco real (07/10, ~10h).** A tabela `agendamentos` estava vazia, então a 003 não perdeu dados. Até então a inclusão de coleta LATAM dava erro (faltavam `cte`, `data_cte`, `entrega_cd`).

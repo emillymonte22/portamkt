@@ -1826,8 +1826,10 @@
             const destaque = ehMesAtual ? 'border-l-4 border-l-sky-500' : '';
             tbody.innerHTML = pedidos.map((p, i) => {
                 const s = situacoes[i];
-                // Todas as 8 datas preenchidas = pedido concluído (linha em verde claro, 14/10)
-                const concluido = s !== 'cancelado_admin' && DATAS_CONTROLE.every(([c]) => p[c]);
+                // Total preenchido (pedido → entrega ao cliente) = pedido concluído, linha em verde claro (14/10; antes
+                // exigia as 8 datas, a pedido dela passou a valer só o Total)
+                const t = difDias(p.dt_pedido, p.entrega_cliente);
+                const concluido = s !== 'cancelado_admin' && t !== null && t >= 0;
                 // Só o admin marca/desfaz o cancelamento (a API confere)
                 const botaoCancelar = currentUser.perfil !== 'admin' ? ''
                     : s === 'cancelado_admin'
@@ -1863,7 +1865,6 @@
                     }
                     return `<td class="p-3 whitespace-nowrap">${formatarData(p[campo])}${etapa}</td>`;
                 }).join('');
-                const t = difDias(p.dt_pedido, p.entrega_cliente);
                 return `
                     <tr data-pedido="${esc(p.pedido_compra)}" class="${concluido ? 'bg-emerald-50 hover:bg-emerald-100/70' : ehCancelado(s) ? 'bg-slate-50 text-slate-400' : 'hover:bg-slate-50'} ${destaque}">
                         <td class="p-3 font-semibold text-slate-900">${txt(p.pedido_compra)}${selo}${botaoCancelar}</td>
@@ -1873,7 +1874,7 @@
                     </tr>`;
             }).join('');
             document.getElementById('ctl-rodape').textContent =
-                `${numero(pedidos.length)} pedidos${ehMesAtual ? ' do mês atual' : ''} · embaixo de cada data, os dias desde a etapa anterior · em verde, os concluídos (todas as etapas)`;
+                `${numero(pedidos.length)} pedidos${ehMesAtual ? ' do mês atual' : ''} · embaixo de cada data, os dias desde a etapa anterior · em verde, os concluídos (com Total: já entregues ao cliente)`;
             filtrarPedidosControle();
         }
 
