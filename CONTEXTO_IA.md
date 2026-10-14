@@ -345,4 +345,8 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
     Coleta", o fundo vermelho da linha e o selo NOVA valem enquanto a coleta está **aguardando coleta**; somem quando o
     CD confirma a coleta ou o recebimento (antes sumiam quando o CD só abria a aba). "Desfazer" volta o aviso. Testado
     no portal local (1 → confirmar coleta 0 → desfazer 1; abrir a aba mantém 1).
+37. **Pedido concluído em verde (14/10):** a pedido dela, na lista do Controle de Pedidos o pedido com **as 8 datas
+    preenchidas** (pedido até entrega ao cliente) fica com a linha verde clara e o selo "concluído". Só na tela, sem
+    mudança na API. Ela também confirmou que o TOTAL do Lead Time semanal é a média pedido → entrega ao cliente (não a
+    soma das etapas), como já era.
 16. **Migrações 002, 003 e 004 aplicadas no banco real (07/10, ~10h).** A tabela `agendamentos` estava vazia, então a 003 não perdeu dados. Até então a inclusão de coleta LATAM dava erro (faltavam `cte`, `data_cte`, `entrega_cd`).

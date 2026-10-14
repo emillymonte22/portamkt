@@ -1745,7 +1745,11 @@
             const destaque = ehMesAtual ? 'border-l-4 border-l-sky-500' : '';
             tbody.innerHTML = pedidos.map((p, i) => {
                 const s = situacoes[i];
-                const selo = s === 'cancelado'
+                // Todas as 8 datas preenchidas = pedido concluído (linha em verde claro, 14/10)
+                const concluido = DATAS_CONTROLE.every(([c]) => p[c]);
+                const selo = concluido
+                    ? '<span class="block mt-1 w-fit bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded-full font-semibold">concluído</span>'
+                    : s === 'cancelado'
                     ? '<span class="block mt-1 w-fit bg-slate-200 text-slate-600 text-[10px] px-2 py-0.5 rounded-full font-semibold">considerado cancelado</span>'
                     : s === 'aguardando'
                         ? '<span class="block mt-1 w-fit bg-amber-100 text-amber-700 text-[10px] px-2 py-0.5 rounded-full font-semibold">aguardando NF</span>'
@@ -1763,7 +1767,7 @@
                 }).join('');
                 const t = difDias(p.dt_pedido, p.entrega_cliente);
                 return `
-                    <tr class="${s === 'cancelado' ? 'bg-slate-50 text-slate-400' : 'hover:bg-slate-50'} ${destaque}">
+                    <tr class="${concluido ? 'bg-emerald-50 hover:bg-emerald-100/70' : s === 'cancelado' ? 'bg-slate-50 text-slate-400' : 'hover:bg-slate-50'} ${destaque}">
                         <td class="p-3 font-semibold text-slate-900">${txt(p.pedido_compra)}${selo}</td>
                         <td class="p-3">${txt(p.seller)}</td>
                         ${celulas}
@@ -1771,7 +1775,7 @@
                     </tr>`;
             }).join('');
             document.getElementById('ctl-rodape').textContent =
-                `${numero(pedidos.length)} pedidos${ehMesAtual ? ' do mês atual' : ''} · embaixo de cada data, os dias desde a etapa anterior`;
+                `${numero(pedidos.length)} pedidos${ehMesAtual ? ' do mês atual' : ''} · embaixo de cada data, os dias desde a etapa anterior · em verde, os concluídos (todas as etapas)`;
         }
 
         // E-mail de cobrança (13/10): pedidos do seller sem NF há mais de N dias (corridos ou úteis). O portal só monta
