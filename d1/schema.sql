@@ -30,6 +30,13 @@ CREATE TABLE IF NOT EXISTS agendamentos (
   ncoleta        TEXT                        -- Nº da coleta na planilha CONTROLE_AÉREO
 );
 
+-- Pedidos de compra marcados como cancelados pelo admin no Controle de Pedidos (migração 011)
+CREATE TABLE IF NOT EXISTS pedidos_cancelados (
+  pedido_compra INTEGER PRIMARY KEY, -- mesmo valor de base_geral.pedido_compra
+  cancelado_por TEXT NOT NULL,       -- username do admin que marcou
+  cancelado_em  TEXT NOT NULL        -- data e hora em ISO UTC
+);
+
 -- Tabelas espelhadas do Databricks (preenchidas pelo Job databricks/sync_d1.py).
 -- Não editar dados nestas tabelas pelo portal: o Job sobrescreve 1x por dia (12h30 de Manaus).
 -- row_hash = sha256 da linha inteira; identifica cada linha já que a origem não tem chave única.

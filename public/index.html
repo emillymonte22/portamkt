@@ -520,9 +520,9 @@
                             <p id="ctl-sem-coleta" class="text-2xl font-bold text-orange-600 mt-1">—</p>
                         </div>
                         <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-                            <p class="text-xs font-semibold text-slate-500">Considerados cancelados no mês</p>
+                            <p class="text-xs font-semibold text-slate-500">Cancelados no mês</p>
                             <p id="ctl-cancelados" class="text-2xl font-bold text-slate-500 mt-1">—</p>
-                            <p class="text-[10px] text-slate-400 mt-1">sem NF e sem nenhuma data há mais de 7 dias</p>
+                            <p class="text-[10px] text-slate-400 mt-1">marcados pelo admin + sem NF e sem nenhuma data há mais de 7 dias</p>
                         </div>
                     </div>
 
@@ -1660,6 +1660,7 @@
         }
 
         function situacaoPedido(p, hoje) {
+            if (p.cancelado_em) return 'cancelado_admin'; // marcado como cancelado pelo admin (14/10)
             const semNf = !(Number(p.nf_seller) > 0) && !p.data_nf;
             const idade = difDias(p.dt_pedido, hoje);
             if (semNf && idade > DIAS_CANCELADO && DATAS_CONTROLE.slice(2).every(([c]) => !p[c])) return 'cancelado';
@@ -1737,6 +1738,18 @@
                     </tr>`).join('');
         }
 
+        // Admin marca ou desfaz "pedido cancelado" (14/10). Cancelado sai das médias, dos avisos e do e-mail de cobrança.
+        async function cancelarPedidoControle(pedido, cancelado) {
+            if (cancelado && !confirm(`Marcar o pedido ${pedido} como cancelado?\n\nEle sai das médias, dos avisos e do e-mail de cobrança. Dá para desfazer depois.`)) return;
+            try {
+                await api('/api/controle-pedidos/cancelar', { method: 'POST', body: JSON.stringify({ pedido_compra: pedido, cancelado }) });
+            } catch (err) {
+                alert(err.message);
+                return;
+            }
+            carregarControle();
+        }
+
         function mostrarControle(dados, aguardando) {
             const { pedidos, hoje, mes } = dados;
             const ehMesAtual = mes === hoje.slice(0, 7);
@@ -1744,7 +1757,8 @@
             document.getElementById('ctl-periodo').textContent = `${NOMES_MESES[Number(m) - 1]}/${ano}${ehMesAtual ? ' · mês atual' : ''}`;
 
             const situacoes = pedidos.map(p => situacaoPedido(p, hoje));
-            const validos = pedidos.filter((_, i) => situacoes[i] !== 'cancelado');
+            const ehCancelado = s => s === 'cancelado' || s === 'cancelado_admin';
+            const validos = pedidos.filter((_, i) => !ehCancelado(situacoes[i]));
             const media = (de, ate) => {
                 const vals = validos.map(p => difDias(p[de], p[ate])).filter(v => v !== null && v >= 0);
                 return { media: vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null, n: vals.length };
@@ -1754,7 +1768,7 @@
             document.getElementById('ctl-total').textContent = numero(pedidos.length);
             document.getElementById('ctl-leadtime').textContent = total.media === null ? '—' : `${umaCasa(total.media)} dias`;
             document.getElementById('ctl-aguardando').textContent = numero(aguardando.length);
-            document.getElementById('ctl-cancelados').textContent = numero(situacoes.filter(s => s === 'cancelado').length);
+            document.getElementById('ctl-cancelados').textContent = numero(situacoes.filter(ehCancelado).length);
             document.getElementById('ctl-sem-coleta').textContent = numero(dados.sem_coleta.length);
 
             avisosControle = { aguardando, semColeta: dados.sem_coleta, hoje };
@@ -1783,8 +1797,15 @@
             tbody.innerHTML = pedidos.map((p, i) => {
                 const s = situacoes[i];
                 // Todas as 8 datas preenchidas = pedido concluído (linha em verde claro, 14/10)
-                const concluido = DATAS_CONTROLE.every(([c]) => p[c]);
-                const selo = concluido
+                const concluido = s !== 'cancelado_admin' && DATAS_CONTROLE.every(([c]) => p[c]);
+                // Só o admin marca/desfaz o cancelamento (a API confere)
+                const botaoCancelar = currentUser.perfil !== 'admin' ? ''
+                    : s === 'cancelado_admin'
+                        ? `<button type="button" onclick="cancelarPedidoControle('${esc(p.pedido_compra)}', false)" class="block mt-1 text-[10px] font-semibold text-sky-700 hover:underline">Desfazer cancelamento</button>`
+                        : `<button type="button" onclick="cancelarPedidoControle('${esc(p.pedido_compra)}', true)" class="block mt-1 text-[10px] font-semibold text-red-600 hover:underline">Marcar como cancelado</button>`;
+                const selo = s === 'cancelado_admin'
+                    ? `<span class="block mt-1 w-fit bg-red-100 text-red-700 text-[10px] px-2 py-0.5 rounded-full font-semibold" title="Marcado por ${esc(p.cancelado_por)} em ${esc(formatarDataHora(p.cancelado_em))}">cancelado</span>`
+                    : concluido
                     ? '<span class="block mt-1 w-fit bg-emerald-100 text-emerald-700 text-[10px] px-2 py-0.5 rounded-full font-semibold">concluído</span>'
                     : s === 'cancelado'
                     ? '<span class="block mt-1 w-fit bg-slate-200 text-slate-600 text-[10px] px-2 py-0.5 rounded-full font-semibold">considerado cancelado</span>'
@@ -1804,8 +1825,8 @@
                 }).join('');
                 const t = difDias(p.dt_pedido, p.entrega_cliente);
                 return `
-                    <tr class="${concluido ? 'bg-emerald-50 hover:bg-emerald-100/70' : s === 'cancelado' ? 'bg-slate-50 text-slate-400' : 'hover:bg-slate-50'} ${destaque}">
-                        <td class="p-3 font-semibold text-slate-900">${txt(p.pedido_compra)}${selo}</td>
+                    <tr class="${concluido ? 'bg-emerald-50 hover:bg-emerald-100/70' : ehCancelado(s) ? 'bg-slate-50 text-slate-400' : 'hover:bg-slate-50'} ${destaque}">
+                        <td class="p-3 font-semibold text-slate-900">${txt(p.pedido_compra)}${selo}${botaoCancelar}</td>
                         <td class="p-3">${txt(p.seller)}</td>
                         ${celulas}
                         <td class="p-3 text-right font-bold text-[#003366]">${t !== null && t >= 0 ? `${numero(t)} d` : '—'}</td>

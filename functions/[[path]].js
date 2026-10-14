@@ -89,6 +89,10 @@ export async function onRequest(context) {
       if (!['admin', 'comercial'].includes(usuario.perfil)) return erro(403, 'Apenas administrador e comercial');
       return await controlePedidos(env, url.searchParams);
     }
+    if (path === '/api/controle-pedidos/cancelar' && request.method === 'POST') {
+      if (usuario.perfil !== 'admin') return erro(403, 'Apenas o administrador pode cancelar pedidos');
+      return await cancelarPedido(request, env, usuario.username);
+    }
     if (path === '/api/relatorio' && request.method === 'GET') return await relatorio(env, url.searchParams);
     if (path === '/api/relatorio/filtros' && request.method === 'GET') return filtrosRelatorio();
     if (path === '/api/tracking' && request.method === 'GET') return await listarTracking(env, url.searchParams);
@@ -980,12 +984,13 @@ async function controlePedidos(env, p) {
        HAVING MAX(NULLIF(nota_fiscal_explode, '')) IS NULL AND MAX(emissao) IS NULL
        ORDER BY dt_pedido, pedido_compra LIMIT 1000`
     ).bind(diasAtras(7), diasAtras(2), seller).all();
-    return Response.json({ seller, hoje, pedidos: results || [] });
+    const cancelados = await lerCancelados(env);
+    return Response.json({ seller, hoje, pedidos: (results || []).filter(x => !cancelados.has(String(x.pedido_compra))) });
   }
 
   const chave = JSON.stringify([hoje, mes, seller, soAviso]);
   const guardado = cacheControle.get(chave);
-  if (guardado && Date.now() - guardado.em < CACHE_FILTROS_MS) return Response.json(guardado.dados);
+  if (guardado && Date.now() - guardado.em < CACHE_FILTROS_MS) return Response.json(comCancelados(guardado.dados, await lerCancelados(env)));
 
   const diasAtras = n => new Date(Date.parse(`${hoje}T00:00:00Z`) - n * 86400000).toISOString().slice(0, 10);
   const consulta = (de, ate) => env.DB.prepare(
@@ -1013,7 +1018,44 @@ async function controlePedidos(env, p) {
   };
   if (cacheControle.size > 50) cacheControle.clear();
   cacheControle.set(chave, { em: Date.now(), dados });
-  return Response.json(dados);
+  return Response.json(comCancelados(dados, await lerCancelados(env)));
+}
+
+// Pedidos cancelados pelo admin (14/10, migração 011). Lidos a cada consulta, fora do cache de 30 min, para o
+// cancelamento valer na hora. Tabela pequena (só os cancelados).
+async function lerCancelados(env) {
+  const { results } = await env.DB.prepare('SELECT pedido_compra, cancelado_por, cancelado_em FROM pedidos_cancelados').all();
+  return new Map((results || []).map(r => [String(r.pedido_compra), r]));
+}
+
+// Marca os cancelados na lista do mês (cancelado_por/cancelado_em) e tira eles dos avisos (aguardando NF e NF sem coleta)
+function comCancelados(dados, cancelados) {
+  if (!cancelados.size) return dados;
+  const fora = lista => lista.filter(x => !cancelados.has(String(x.pedido_compra)));
+  return {
+    ...dados,
+    pedidos: dados.pedidos.map(x => {
+      const c = cancelados.get(String(x.pedido_compra));
+      return c ? { ...x, cancelado_por: c.cancelado_por, cancelado_em: c.cancelado_em } : x;
+    }),
+    recentes: fora(dados.recentes),
+    sem_coleta: fora(dados.sem_coleta),
+  };
+}
+
+// POST /api/controle-pedidos/cancelar {pedido_compra, cancelado: true/false} — só admin. true marca, false desfaz.
+async function cancelarPedido(request, env, username) {
+  const { pedido_compra, cancelado } = await request.json().catch(() => ({}));
+  const numeroPedido = String(pedido_compra ?? '');
+  if (!/^\d{1,15}$/.test(numeroPedido)) return erro(400, 'Pedido inválido');
+  if (cancelado) {
+    await env.DB.prepare(
+      'INSERT OR REPLACE INTO pedidos_cancelados (pedido_compra, cancelado_por, cancelado_em) VALUES (?, ?, ?)'
+    ).bind(Number(numeroPedido), username, new Date().toISOString()).run();
+  } else {
+    await env.DB.prepare('DELETE FROM pedidos_cancelados WHERE pedido_compra = ?').bind(Number(numeroPedido)).run();
+  }
+  return Response.json({ success: true });
 }
 
 // Relatório para baixar: todas as colunas da base geral (as 3 bases unificadas, com as colunas da planilha).
