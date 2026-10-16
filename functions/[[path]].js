@@ -108,8 +108,11 @@ export async function onRequest(context) {
 // ---------- Autenticação ----------
 
 async function login(request, env) {
-  const { username, senha } = await request.json().catch(() => ({}));
-  if (typeof username !== 'string' || typeof senha !== 'string' || !username || !senha) {
+  const { username: digitado, senha } = await request.json().catch(() => ({}));
+  // Login pelo e-mail (16/10): os logins são gravados em minúsculas (ferramentas/acessos.ps1), então
+  // "CD@Bemol.com.br " vale igual a "cd@bemol.com.br"
+  const username = typeof digitado === 'string' ? digitado.trim().toLowerCase() : '';
+  if (typeof senha !== 'string' || !username || !senha) {
     return erro(400, 'Informe utilizador e senha');
   }
 

@@ -221,7 +221,20 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 
 ## 13. Usuários do portal
 
-Tabela `usuarios` (admin, cd, comercial: um de cada hoje). Para criar um usuário, insira a senha em texto puro; ela vira hash no primeiro login:
+Tabela `usuarios` (admin, cd, comercial: um de cada hoje). **Desde 16/10, o jeito certo é `ferramentas\acessos.ps1`**
+(login = e-mail em minúsculas; o login do portal ignora maiúsculas e espaços): gera a senha (14 caracteres), mostra
+**uma vez** e grava só o hash PBKDF2 (igual a `gerarHashSenha()`). Nenhuma lista de senhas fica guardada em lugar
+nenhum (decisão: o repositório é público, e uma lista de senhas seria o 1º alvo num vazamento).
+```
+powershell -ExecutionPolicy Bypass -File ferramentas\acessos.ps1 -Listar                                   # quem tem acesso
+powershell -ExecutionPolicy Bypass -File ferramentas\acessos.ps1 -Criar -Email cd@bemol.com.br -Perfil cd # admin|cd|comercial
+powershell -ExecutionPolicy Bypass -File ferramentas\acessos.ps1 -NovaSenha -Email cd@bemol.com.br        # derruba a sessão antiga
+powershell -ExecutionPolicy Bypass -File ferramentas\acessos.ps1 -Remover -Email cd@bemol.com.br
+```
+(`-Local` usa o banco de teste. Testado em 16/10 no portal local: criar, entrar, senha errada, trocar e remover.)
+O `ferramentas\trocar_senha.ps1` citado abaixo **não existe** na pasta; use o `acessos.ps1 -NovaSenha`.
+
+Jeito antigo — criar um usuário com a senha em texto puro (ela vira hash no primeiro login):
 `npx -y wrangler@4.147.0 d1 execute portamkt-db --remote --command "INSERT INTO usuarios (username, senha, perfil) VALUES ('nome', 'senha-inicial', 'cd')"`
 
 Para **trocar a senha** (e, se quiser, o login) de alguém, use o script que gera o comando com a senha **já em hash** (a senha é digitada escondida e nunca fica em texto puro; exige 12+ caracteres com 3 tipos):
@@ -450,4 +463,11 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
     então se falhar o portal já foi atualizado e o e-mail de falha avisa. 1ª execução: 16/10 11h33 (16.574 + 467 + 27 +
     6 + 6 linhas). **Supabase** (cópia de segurança fora do Databricks, escolha dela): ainda sem projeto; precisa da
     autorização da TI para mandar dados da Bemol para fora — ver Pendências.
+47. **Cadastro de acessos por e-mail (16/10):** ela pediu uma base com "e-mail tal, senha tal" no GitHub ou no Supabase
+    para conferir quem tem acesso. **Não foi feito com senha**: o repositório `emillymonte22/portamkt` é **público** e
+    uma lista de senhas daria acesso a qualquer login. No lugar: `ferramentas\acessos.ps1` (seção 13) e o login
+    aceitando o e-mail em qualquer caixa (`login()` faz `trim().toLowerCase()`; os 3 logins atuais — `admin`, `cd01`,
+    `comercial` — já eram minúsculos). Em aberto, perguntado a ela: deixar o repositório privado; onde fica a lista de
+    acessos sem senha (tela no portal, Databricks ou Supabase); teste de segurança do login (inclui o limite de
+    tentativas, que está nas pendências).
 16. **Migrações 002, 003 e 004 aplicadas no banco real (07/10, ~10h).** A tabela `agendamentos` estava vazia, então a 003 não perdeu dados. Até então a inclusão de coleta LATAM dava erro (faltavam `cte`, `data_cte`, `entrega_cd`).
