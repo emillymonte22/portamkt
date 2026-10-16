@@ -163,6 +163,10 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 ## 10. Job do Databricks
 
 - Nome: `portamkt - sync Databricks -> D1` (ID `1025737974527673`), notebook em `/Users/emillymonte@bemol.com.br/portamkt/sync_d1`.
+- **Desde 16/10 são 2 Jobs iguais** (pedido da Emilly: "atualizar todo dia 10h", mantendo o das 12h30): este, às 12h30, e
+  `portamkt - sync Databricks -> D1 (10h)` (ID `318486496231655`, configuração em `databricks/job_10h.json`), às **10h**.
+  Mesmo notebook, cluster e e-mails de falha. Para mudar o das 10h: `databricks jobs reset` com o ID dele (o
+  `ferramentas\atualizar_agendamento.ps1` só mexe no das 12h30).
 - Roda no cluster compartilhado **DATA-COMERCIAL-01**, **1 vez por dia, às 12h30** de Manaus (pedido da Emilly em 09/10; antes 8h e 12h, depois 11h30 e 15h30, depois só 11h30, tudo no mesmo dia). Atualiza todas as tabelas de uma vez, e o portal só muda nesse horário (só grava o que mudou desde a execução anterior; cada execução lê ~55 mil linhas para comparar). Tempo máximo 30 min (a execução com a base geral leva ~4 min). Falhas mandam e-mail. Para mudar horário/tempo máximo: editar `databricks/job.json` e rodar `ferramentas\atualizar_agendamento.ps1`.
 - Lê as duas tabelas sem linhas repetidas, calcula um hash por linha e só envia ao D1 o que mudou (insere novas, apaga as que sumiram). Tem trava: se a origem vier com menos da metade das linhas, aborta sem apagar nada.
 - Usa o secret `portamkt/cloudflare_token` do Databricks (API Token do Cloudflare com permissão D1:Edit).
@@ -426,4 +430,10 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
     LLS não traz a linha); o cursor anda pelas linhas lidas, mesmo as tiradas por esse filtro. O nome do arquivo ganha
     `_cte<número>`. Testado no banco real só leitura (CT-e 148149 → pedidos da Vitrola) e no portal local (busca e
     relatório com e sem zeros, CT-e fora da regra, CT-e inválido).
+45. **2ª atualização diária às 10h (16/10):** a pedido dela ("atualizar esse portal todo dia 10h, já criar o job",
+    "não cancelar", "deixa como está"), criado um 2º Job, `portamkt - sync Databricks -> D1 (10h)` (ID
+    `318486496231655`, `databricks/job_10h.json`), cópia do Job das 12h30 com horário `0 0 10 * * ?` (Manaus). O das
+    12h30 continua igual. Cada execução lê ~55 mil linhas para comparar e grava só o que mudou (cabe no plano grátis).
+    Atenção: as tabelas de origem mudam 1x por dia (item 7); se ainda não tiverem mudado às 10h, essa execução não
+    traz nada novo e quem atualiza é a das 12h30.
 16. **Migrações 002, 003 e 004 aplicadas no banco real (07/10, ~10h).** A tabela `agendamentos` estava vazia, então a 003 não perdeu dados. Até então a inclusão de coleta LATAM dava erro (faltavam `cte`, `data_cte`, `entrega_cd`).
