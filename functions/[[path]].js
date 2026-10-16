@@ -737,14 +737,18 @@ async function listarEntregas(env, p) {
   const tabela = await tabelaPedidos(env);
   if (!busca) return Response.json(await paginaEntregas(env, tabela, filtros, valores));
 
-  // Busca por número de NF, pedido de compra ou ordem (aceita digitar com pontos, traços etc.)
+  // Busca por número de NF, pedido de compra, ordem ou CT-e (aceita digitar com pontos, traços etc.)
   const numero = busca.replace(/\D/g, '');
-  if (!numero || numero.length > 18) return erro(400, 'Busque por número de NF, pedido de compra ou ordem');
+  if (!numero || numero.length > 18) return erro(400, 'Busque por número de NF, pedido de compra, ordem ou CT-e');
 
-  // 1º: número exato nas colunas com índice (pedido de compra e NF do seller): leve
+  // 1º: número exato no pedido de compra, na NF do seller e no CT-e (16/10). O CT-e não tem índice, então
+  // com ele a consulta lê a tabela (~18 mil linhas); fica no 1º passo para um CT-e com o mesmo número de
+  // uma NF de outro pedido não ser escondido por ela.
   const n = Number(numero);
+  const cte = tabela === 'base_geral' ? filtroCte(numero) : null;
   const indexada = await paginaEntregas(env, tabela,
-    [...filtros, '(pedido_compra = ? OR nota_fiscal_explode = ?)'], [...valores, n, nfTracking(numero)]);
+    [...filtros, `(pedido_compra = ? OR nota_fiscal_explode = ?${cte ? ` OR ${cte.sql}` : ''})`],
+    [...valores, n, nfTracking(numero), ...(cte ? cte.valores : [])]);
   if (indexada.itens.length || aposData) return Response.json(indexada);
 
   // 2º: número exato na NF Bemol, na ordem e na NF do seller de 9 posições (sem índice: lê a tabela, ~18 mil
@@ -762,8 +766,8 @@ async function listarEntregas(env, p) {
     valoresParcial.push(`${ano}-01-01`, `${ano}-12-31`);
   }
   const contem = `%${numero}%`;
-  filtrosParcial.push('(CAST(pedido_compra AS TEXT) LIKE ? OR CAST(ordem AS TEXT) LIKE ? OR CAST(nf AS TEXT) LIKE ? OR nota_fiscal_explode LIKE ?)');
-  valoresParcial.push(contem, contem, contem, contem);
+  filtrosParcial.push(`(CAST(pedido_compra AS TEXT) LIKE ? OR CAST(ordem AS TEXT) LIKE ? OR CAST(nf AS TEXT) LIKE ? OR nota_fiscal_explode LIKE ?${tabela === 'base_geral' ? ' OR transportes LIKE ?' : ''})`);
+  valoresParcial.push(contem, contem, contem, contem, ...(tabela === 'base_geral' ? [contem] : []));
   return Response.json(await paginaEntregas(env, tabela, filtrosParcial, valoresParcial));
 }
 
@@ -1092,23 +1096,50 @@ async function relatorio(env, p) {
     `(e.n_fornecedor IN (${r.sellers.map(() => '?').join(', ')}) AND e.transportes LIKE ?)`).join(' OR ')})`);
   valores.push(...regras.flatMap(r => [...r.sellers, `%${r.contem}%`]));
 
+  // Filtro por CT-e (16/10): número exato, com ou sem os zeros à esquerda
+  const cteBusca = (p.get('cte') || '').replace(/\D/g, '').replace(/^0+/, '');
+  if (p.get('cte') && !cteBusca) return erro(400, 'CT-e inválido (só números)');
+  if (cteBusca) {
+    const cte = filtroCte(cteBusca);
+    if (!cte) return erro(400, 'CT-e inválido (até 10 dígitos)');
+    filtros.push(cte.sql.replaceAll('transportes', 'e.transportes'));
+    valores.push(...cte.valores);
+  }
+
   const { results } = await env.DB.prepare(
     `SELECT e.rowid AS _id, e.* FROM base_geral e WHERE ${filtros.join(' AND ')} ORDER BY e.rowid LIMIT ?`
   ).bind(...valores, LINHAS_POR_PARTE_RELATORIO).all();
+  const lidas = results || [];
 
   // Transportadora e CT-e do relatório: só os da regra que vale para o seller da linha
-  const itens = (results || []).map(({ row_hash, transportes, ...linha }) => {
+  const itens = lidas.map(({ row_hash, transportes, ...linha }) => {
     const daRegra = regras.filter(r => r.sellers.includes(linha.n_fornecedor));
     const pares = String(transportes || '').split(',').map(par => par.split(SEP_TRANSPORTE))
       .filter(([transp]) => transp && daRegra.some(r => transp.toUpperCase().includes(r.contem)));
     linha.transportador = [...new Set(pares.map(([transp]) => transp))].join(', ');
     linha.cte = [...new Set(pares.map(([, cte]) => cte).filter(Boolean))].join(', ');
+    // Com filtro de CT-e, ele precisa ser o da transportadora da regra (não o de outra que veio na mesma NF)
+    linha._fica = !cteBusca || pares.some(([, cte]) => String(cte || '').replace(/^0+/, '') === cteBusca);
     return linha;
   });
   return Response.json({
-    itens,
-    proximo: itens.length === LINHAS_POR_PARTE_RELATORIO ? itens[itens.length - 1]._id : null,
+    itens: itens.filter(l => l._fica).map(({ _fica, ...linha }) => linha),
+    // O cursor anda pelas linhas lidas, mesmo as que o filtro de CT-e tirou
+    proximo: lidas.length === LINHAS_POR_PARTE_RELATORIO ? lidas[lidas.length - 1]._id : null,
   });
+}
+
+// CT-e na base geral (16/10): em base_geral.transportes ("transportadora␟cte,…") o mesmo CT-e aparece com
+// zeros à esquerda (tracking: 0000148149) ou sem (planilha e outras transportadoras: 148149). Procura as duas
+// formas, sempre o número inteiro (entre o ␟ e a vírgula). Sem índice: lê a tabela.
+function filtroCte(numero) {
+  const sem = String(numero).replace(/^0+/, '');
+  if (!sem || sem.length > 10) return null;
+  const formas = [...new Set([sem, sem.padStart(10, '0')])];
+  return {
+    sql: `(${formas.map(() => `(',' || transportes || ',') LIKE ?`).join(' OR ')})`,
+    valores: formas.map(f => `%${SEP_TRANSPORTE}${f},%`),
+  };
 }
 
 // Transportadoras do relatório e para quais sellers cada uma vale (pedido da Emilly, 07/10):
