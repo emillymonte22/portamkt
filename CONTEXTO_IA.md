@@ -168,6 +168,7 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
   Mesmo notebook, cluster e e-mails de falha. Para mudar o das 10h: `databricks jobs reset` com o ID dele (o
   `ferramentas\atualizar_agendamento.ps1` só mexe no das 12h30).
 - Roda no cluster compartilhado **DATA-COMERCIAL-01**, **1 vez por dia, às 12h30** de Manaus (pedido da Emilly em 09/10; antes 8h e 12h, depois 11h30 e 15h30, depois só 11h30, tudo no mesmo dia). Atualiza todas as tabelas de uma vez, e o portal só muda nesse horário (só grava o que mudou desde a execução anterior; cada execução lê ~55 mil linhas para comparar). Tempo máximo 30 min (a execução com a base geral leva ~4 min). Falhas mandam e-mail. Para mudar horário/tempo máximo: editar `databricks/job.json` e rodar `ferramentas\atualizar_agendamento.ps1`.
+- No fim, grava a **cópia completa** dos dados do portal em `comercial.logint.portamkt_*` (item 46 do histórico).
 - Lê as duas tabelas sem linhas repetidas, calcula um hash por linha e só envia ao D1 o que mudou (insere novas, apaga as que sumiram). Tem trava: se a origem vier com menos da metade das linhas, aborta sem apagar nada.
 - Usa o secret `portamkt/cloudflare_token` do Databricks (API Token do Cloudflare com permissão D1:Edit).
 - A Emilly **não tem permissão de computação serverless** no workspace; por isso o Job usa o cluster DATA-COMERCIAL-01 (`0811-172632-o2hyyoxq`, desliga após 10 min parado). Existe também a política de cluster "comercial" (`001D0520A2F3F477`, para Jobs) como alternativa.
@@ -197,6 +198,9 @@ No front, todas as chamadas passam pela função `api(caminho, opcoes)` em `publ
 - Futuro: possível migração para a workstation NVIDIA do setor (via Cloudflare Tunnel ou só na rede interna).
 - Ideias para facilitar as alterações: separar o JavaScript de `public/index.html` em `public/app.js` (arquivo menor, a IA não corta); checagem automática no GitHub (GitHub Actions) para barrar arquivo cortado, coluna inexistente e remoção de `esc()`; trabalhar em branch com link de preview do Cloudflare antes de juntar na `main`.
 - Login por SSO da Bemol (Cloudflare Access + Entra ID) quando a TI liberar; até lá, usuário e senha.
+- **Supabase (16/10):** cópia de segurança de todos os dados (mesmas tabelas da cópia em `comercial.logint`, item 46
+  do histórico). Falta: autorização da TI, criar o projeto e guardar a conexão como secret no Databricks
+  (`portamkt/supabase_*`), nunca no chat nem no GitHub.
 
 ## 12. Ferramentas e acessos
 
@@ -436,4 +440,14 @@ Em ordem, para quem pegar o projeto entender por que as coisas são como são:
     12h30 continua igual. Cada execução lê ~55 mil linhas para comparar e grava só o que mudou (cabe no plano grátis).
     Atenção: as tabelas de origem mudam 1x por dia (item 7); se ainda não tiverem mudado às 10h, essa execução não
     traz nada novo e quem atualiza é a das 12h30.
+46. **Cópia completa dos dados no Databricks (16/10):** a empresa precisa dos dados do portal guardados num lugar dela.
+    No fim de cada execução (as duas), o notebook regrava (overwrite, Delta: versões antigas em `DESCRIBE HISTORY`) em
+    **`comercial.logint`**, schema escolhido pela Emilly (o da `f_tracking_aereo`; ela tem CREATE_TABLE nele):
+    `portamkt_base_geral`, `portamkt_coletas_planilha`, `portamkt_ctes_latam` (o que o Job monta) e
+    `portamkt_agendamentos`, `portamkt_pedidos_cancelados` (o que nasce no portal, lido do D1 com `SELECT *`). Todas
+    com a coluna `atualizado_em` (Manaus). `usuarios` (senhas) e `sync_log` ficam de fora. Tabela do D1 vazia mantém a
+    cópia anterior. Função `gravar_copia()` / `tabela_do_d1()` na última célula de `sync_d1.py`; roda depois do D1,
+    então se falhar o portal já foi atualizado e o e-mail de falha avisa. 1ª execução: 16/10 11h33 (16.574 + 467 + 27 +
+    6 + 6 linhas). **Supabase** (cópia de segurança fora do Databricks, escolha dela): ainda sem projeto; precisa da
+    autorização da TI para mandar dados da Bemol para fora — ver Pendências.
 16. **Migrações 002, 003 e 004 aplicadas no banco real (07/10, ~10h).** A tabela `agendamentos` estava vazia, então a 003 não perdeu dados. Até então a inclusão de coleta LATAM dava erro (faltavam `cte`, `data_cte`, `entrega_cd`).

@@ -503,8 +503,51 @@ sincronizar("comercial.logint.f_tracking_aereo", "tracking_aereo")
 ctes_latam, ctes_latam_nf = ler_ctes_latam()
 sincronizar("btracker_ctes (LATAM)", "ctes_latam", ctes_latam)
 nfs_planilha, coletas_planilha = ler_controle_aereo()
-sincronizar("base geral (manifest + tracking + CT-e LATAM + NFs btracker + planilha)", "base_geral",
-            montar_base_geral(manifest, nfs_planilha, ctes_latam_nf, ler_datas_nf()))
+base_geral = montar_base_geral(manifest, nfs_planilha, ctes_latam_nf, ler_datas_nf())
+sincronizar("base geral (manifest + tracking + CT-e LATAM + NFs btracker + planilha)", "base_geral", base_geral)
 sincronizar(f"planilha {PLANILHA_ABA} (coletas)", "coletas_planilha", coletas_planilha)
+
+# COMMAND ----------
+
+# ---------- Cópia completa no Databricks (pedido da Emilly, 16/10) ----------
+# A empresa precisa dos dados do portal guardados num lugar dela. A cada execução, depois de atualizar o D1, o Job
+# regrava em comercial.logint (tabelas Delta: o histórico das versões fica no DESCRIBE HISTORY):
+#   - o que o Job monta: base geral, coletas da planilha e CT-es da LATAM;
+#   - o que nasce no portal e só existe no D1: coletas LATAM incluídas (agendamentos) e pedidos cancelados.
+# usuarios (senhas) e sync_log ficam de fora. Se esta parte falhar, o portal já foi atualizado e o e-mail de falha avisa.
+COPIA_SCHEMA = "comercial.logint"
+ATUALIZADO_EM = datetime.now(timezone(timedelta(hours=-4))).strftime("%Y-%m-%d %H:%M:%S")  # Manaus
+
+
+def gravar_copia(df, nome, descricao):
+    tabela = f"{COPIA_SCHEMA}.portamkt_{nome}"
+    (df.toDF(*[c.lower() for c in df.columns])
+       .withColumn("atualizado_em", F.lit(ATUALIZADO_EM))
+       .write.mode("overwrite").option("overwriteSchema", "true").saveAsTable(tabela))
+    spark.sql(f"COMMENT ON TABLE {tabela} IS '{descricao} Portal portamkt, gravada pelo Job sync_d1.'")
+    print(f"cópia -> {tabela}")
+
+
+def tabela_do_d1(destino):
+    # Tabelas pequenas, digitadas no portal: lidas inteiras (poucas linhas). Tudo como texto, igual ao D1.
+    linhas = d1({"sql": f"SELECT * FROM {destino}"})[0]["results"]
+    if not linhas:
+        print(f"cópia: {destino} vazia no D1, mantida a cópia anterior")
+        return None
+    colunas = list(linhas[0].keys())
+    esquema = StructType([StructField(c, StringType()) for c in colunas])
+    return spark.createDataFrame(
+        [tuple(None if l.get(c) is None else str(l.get(c)) for c in colunas) for l in linhas], esquema)
+
+
+gravar_copia(base_geral, "base_geral",
+             "Pedidos do marketplace com as 3 bases unificadas (manifest + tracking + planilha CONTROLE_AEREO).")
+gravar_copia(coletas_planilha, "coletas_planilha", f"Coletas da planilha CONTROLE_AEREO, aba {PLANILHA_ABA}.")
+gravar_copia(ctes_latam, "ctes_latam", "CT-es da LATAM para os sellers do marketplace.")
+for nome, descricao in [("agendamentos", "Coletas LATAM incluidas no portal, com liberacao e confirmacoes do CD."),
+                        ("pedidos_cancelados", "Pedidos marcados como cancelados no Controle de Pedidos.")]:
+    df_portal = tabela_do_d1(nome)
+    if df_portal is not None:
+        gravar_copia(df_portal, nome, descricao)
 
 
